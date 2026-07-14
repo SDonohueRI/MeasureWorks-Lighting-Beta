@@ -1,1 +1,201 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0072CE"/><stop offset="1" stop-color="#F58220"/></linearGradient></defs><path d="M75 10 C36 10 10 38 10 72 C10 96 22 110 34 122 C42 130 46 138 47 148 L103 148 C104 138 108 130 116 122 C128 110 140 96 140 72 C140 38 114 10 75 10 Z" fill="url(#g)"/><rect x="47" y="156" width="56" height="9" rx="4.5" fill="#5b6770"/><rect x="47" y="171" width="56" height="9" rx="4.5" fill="#5b6770"/><rect x="59" y="186" width="32" height="9" rx="4.5" fill="#5b6770"/></svg>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lighting Savings Calculator — Prototype</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20150%20200%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%230072CE%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23F58220%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20d%3D%22M75%2010%20C36%2010%2010%2038%2010%2072%20C10%2096%2022%20110%2034%20122%20C42%20130%2046%20138%2047%20148%20L103%20148%20C104%20138%20108%20130%20116%20122%20C128%20110%20140%2096%20140%2072%20C140%2038%20114%2010%2075%2010%20Z%22%20fill%3D%22url%28%23g%29%22/%3E%3Crect%20x%3D%2247%22%20y%3D%22156%22%20width%3D%2256%22%20height%3D%229%22%20rx%3D%224.5%22%20fill%3D%22%235b6770%22/%3E%3Crect%20x%3D%2247%22%20y%3D%22171%22%20width%3D%2256%22%20height%3D%229%22%20rx%3D%224.5%22%20fill%3D%22%235b6770%22/%3E%3Crect%20x%3D%2259%22%20y%3D%22186%22%20width%3D%2232%22%20height%3D%229%22%20rx%3D%224.5%22%20fill%3D%22%235b6770%22/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{
+  --ink:#1b2733; --panel:#ffffff; --bg:#eef1f4; --line:#d5dbe2;
+  --accent:#0e6e8c; --accent-ink:#0a5069;
+  --save:#1c7c4a; --warn:#b25d00; --flag:#c23b22;
+  --default-tag:#6b7885; --override-tag:#b25d00; --metered-tag:#0e6e8c;
+  --mono:'Consolas','SF Mono',ui-monospace,monospace;
+  --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--ink);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+header h1{font-size:17px;font-weight:600;letter-spacing:.3px}
+header .sub{color:#9fb0bf;font-size:12px;font-family:var(--mono)}
+header .spacer{flex:1}
+select,input,button,textarea{font:inherit;color:inherit}
+.toolbar button{background:#2c3d4d;color:#fff;border:1px solid #46586a;border-radius:4px;padding:7px 13px;cursor:pointer;margin-left:6px}
+.toolbar button:hover{background:#3a4f63}
+.toolbar button.primary{background:var(--accent);border-color:var(--accent)}
+.toolbar button.primary:hover{background:var(--accent-ink)}
+main{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px 24px;max-width:1500px;margin:0 auto}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin-bottom:16px}
+.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:#51606e;padding:10px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.panel h2 .hint{font-weight:400;text-transform:none;letter-spacing:0;color:#8a97a3;font-size:11px}
+.panel .body{padding:14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label.field{display:block;font-size:12px;color:#51606e}
+label.field b{display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:4px;color:#37424d}
+label.field input,label.field select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.info{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#e2e8ee;color:#51606e;font-size:10px;align-items:center;justify-content:center;cursor:help;font-weight:700;position:relative}
+.info:hover::after{content:attr(data-tip);position:absolute;left:18px;top:-4px;z-index:50;background:var(--ink);color:#fff;font-weight:400;padding:8px 10px;border-radius:5px;width:280px;font-size:11.5px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+table.lines{width:100%;border-collapse:collapse;font-size:12.5px}
+table.lines th{background:#f4f6f8;border-bottom:2px solid var(--line);padding:7px 6px;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:#51606e;white-space:nowrap}
+table.lines td{border-bottom:1px solid #e8ecf0;padding:4px 5px;vertical-align:middle}
+table.lines input,table.lines select{width:100%;min-width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono);font-size:12px}
+table.lines select{font-family:var(--sans)}
+td.watts{font-family:var(--mono);color:#51606e;text-align:right;white-space:nowrap}
+td.rowsave{font-family:var(--mono);text-align:right;color:var(--save);white-space:nowrap}
+.tag{display:inline-block;font-size:9.5px;font-family:var(--mono);padding:1px 5px;border-radius:3px;color:#fff;cursor:pointer;user-select:none}
+.tag.default{background:var(--default-tag)} .tag.override{background:var(--override-tag)} .tag.metered{background:var(--metered-tag)}
+.rowbtn{border:none;background:none;cursor:pointer;color:#8a97a3;font-size:14px;padding:2px 4px}
+.rowbtn:hover{color:var(--ink)}
+.addrow{margin-top:10px}
+.addrow button{background:#fff;border:1px dashed #9fb0bf;border-radius:4px;padding:7px 14px;cursor:pointer;color:#51606e}
+.addrow button:hover{border-color:var(--accent);color:var(--accent)}
+aside .results{position:sticky;top:16px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.kpi{border:1px solid var(--line);border-radius:5px;padding:10px}
+.kpi .v{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--ink)}
+.kpi.save .v{color:var(--save)} .kpi.money .v{color:var(--accent-ink)}
+.kpi .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:#8a97a3;margin-top:3px}
+.flags{padding:0 14px 14px}
+.flag-item{border-left:3px solid var(--warn);background:#fdf6ec;padding:7px 10px;font-size:12px;margin-bottom:6px;border-radius:0 4px 4px 0}
+.flag-item.ok{border-color:var(--save);background:#eef7f1;color:#28563d}
+#shape{width:100%;height:150px;display:block}
+.chartwrap{padding:10px 14px 14px}
+.legend{display:flex;gap:14px;font-size:11px;color:#51606e;padding:0 14px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.qpl{display:flex;gap:8px;align-items:flex-end}
+#settingsbody h3{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:#51606e;margin:18px 0 8px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.setgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.sethead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.setflags{flex:1;max-width:420px}
+.setactions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+input.missing{border-color:var(--flag);background:#fdf1ef}
+.pastebox{border:2px dashed #9fb0bf;border-radius:5px;padding:12px;text-align:center;color:#8a97a3;outline:none;cursor:text;font-size:12px}
+.importbtn{background:var(--accent);color:#fff;border:none;border-radius:4px;padding:7px 14px;cursor:pointer}
+.importbtn:hover{background:var(--accent-ink)}
+.importbtn.ghost{background:#e2e8ee;color:#51606e}
+.mapsel{width:100%;font-size:11px;padding:3px}
+.qpl button{background:#e2e8ee;border:1px solid var(--line);border-radius:4px;padding:6px 12px;color:#8a97a3;cursor:not-allowed}
+.note{font-size:11px;color:#8a97a3;margin-top:5px;line-height:1.4}
+footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color:#8a97a3;font-family:var(--mono)}
+.modechip{font-family:var(--mono);font-size:11px;background:#123a49;color:#8fd4ea;border:1px solid #1c5568;padding:3px 9px;border-radius:12px}
+.toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#37424d;padding-top:18px}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Lighting Savings Calculator</h1><div class="sub">framework prototype · custom measures · v0.1</div></div>
+  <span class="modechip" id="modechip">MODE: 8760</span>
+  <div class="spacer"></div>
+  <div class="toolbar">
+    <button onclick="openSettings()">Profile settings</button>
+    <button onclick="saveProject()">Save project</button>
+    <button onclick="document.getElementById('loadfile').click()">Open project</button>
+    <input type="file" id="loadfile" accept=".json" style="display:none" onchange="loadProject(event)">
+    <select id="exportfmt" style="background:#2c3d4d;color:#fff;border:1px solid #46586a;border-radius:4px;padding:7px 8px;margin-left:6px">
+      <option value="tabs">Multi-tab workbook</option>
+      <option value="single">Single-sheet flow</option>
+    </select>
+    <button class="primary" onclick="document.getElementById('exportfmt').value==='single'?exportExcelSingle():exportExcel()">Export to Excel</button>
+  </div>
+</header>
+<main>
+<div>
+  <section class="panel">
+    <h2>Project &amp; program</h2>
+    <div class="body grid2">
+      <label class="field"><b>Project name</b><input id="projname" value="Sample Office Retrofit" oninput="recalc()"></label>
+      <label class="field"><b>Program profile <span class="info" data-tip="Selects the client assumption package: wattage table, hours-of-use defaults, coincidence/peak definition, interactive effects policy, incentive rules, and output mode (annual vs 8760). Profile version is stamped on all outputs.">i</span></b>
+        <select id="profile" onchange="onProfileChange()"></select></label>
+      <label class="field"><b>Building type <span class="info" data-tip="Drives default operating schedules (weekday/weekend hourly profiles) used to build the 8760 and the hours-of-use defaults. Override HOU per line if metered or customer data is available.">i</span></b>
+        <select id="bldg" onchange="onBldgChange()"></select></label>
+      <label class="field"><b>Blended rate $/kWh <span class="info" data-tip="Customer's blended electric rate, used only for customer economics (payback). Separate from program assumptions — does not affect savings or incentive.">i</span></b><input id="rate" type="number" step="0.001" value="0.10" oninput="recalc()"></label>
+      <div class="toggle"><input type="checkbox" id="ie_toggle" onchange="recalc()"><label for="ie_toggle">Apply HVAC interactive effects <span class="info" data-tip="Multiplies electric savings by the profile's interactive effects factor (waste-heat impact on cooling/heating). Toggle per client policy — CA custom typically applies it; many Midwest programs do not. Factor and source shown in the Assumptions export.">i</span></label></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Line items <span class="hint">type a fixture code or description for autocomplete · watts fill from the profile wattage table</span></h2>
+    <div class="body">
+      <table class="lines">
+        <thead><tr>
+          <th style="width:24px"></th>
+          <th>Space / location</th>
+          <th>Space type <span class="info" data-tip="Sets the default operating schedule and HOU for this line from the profile's schedule library. Source citation appears in the Assumptions tab of the export.">i</span></th>
+          <th>Existing fixture</th><th>W</th>
+          <th>Qty</th>
+          <th>Proposed fixture</th><th>W</th>
+          <th>Controls <span class="info" data-tip="Proposed controls savings factor from the profile (occupancy, daylighting, networked). In 8760 mode the factor reshapes the hourly profile; in annual mode it reduces effective hours.">i</span></th>
+          <th>HOU <span class="info" data-tip="Annual operating hours. Defaults from profile by space type — click the tag to cycle provenance: DEFAULT → OVERRIDE → METERED. Overrides should carry justification for review.">i</span></th>
+          <th>Cost $ <span class="info" data-tip="Installed cost (material + labor) for this line. Used for incentive caps and simple payback.">i</span></th>
+          <th>kWh saved</th>
+          <th style="width:52px"></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="addrow"><button onclick="addRow()">+ Add line item</button></div>
+      <datalist id="fixlist"></datalist>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Paste from spreadsheet <span class="hint">copy a range in Excel, click below, and press Ctrl+V</span></h2>
+    <div class="body">
+      <div id="pastezone" tabindex="0" contenteditable="true" spellcheck="false"
+           style="border:2px dashed #9fb0bf;border-radius:5px;padding:18px;text-align:center;color:#8a97a3;outline:none;cursor:text"
+           onpaste="onPaste(event)" oninput="this.textContent='Click here, then paste (Ctrl+V)'">Click here, then paste (Ctrl+V)</div>
+      <div class="note">Accepts copied cell ranges from Excel or Google Sheets (tab-separated) and CSV text. A header row is auto-detected and columns auto-mapped by name — e.g. <code>Space, Space Type, Existing Fixture, Qty, Proposed Fixture, Hours, Cost</code>. Fixture text is matched against the wattage table; unmatched fixtures import with 0 W for manual entry. You can adjust any column's mapping before importing.</div>
+      <div id="importpreview" style="margin-top:10px"></div>
+      <div class="note" id="importmsg"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>DLC QPL lookup <span class="hint">scaffolded — not yet wired</span></h2>
+    <div class="body">
+      <div class="qpl">
+        <label class="field" style="flex:1"><b>DLC Product ID</b><input placeholder="e.g. PXXXXXXX" disabled></label>
+        <button disabled title="QPL API not configured">Look up</button>
+      </div>
+      <div class="note">Reserved for DLC Qualified Products List integration. When an API key or QPL snapshot is provided, lookup will populate proposed fixture wattage, lumens, and listing status, and validate program eligibility. See <code>qplLookup()</code> stub in source.</div>
+    </div>
+  </section>
+</div>
+
+<aside>
+  <section class="panel results">
+    <h2>Results <span class="hint">live</span></h2>
+    <div class="kpis">
+      <div class="kpi save"><div class="v" id="k_kwh">0</div><div class="l">kWh / yr</div></div>
+      <div class="kpi save"><div class="v" id="k_kw">0</div><div class="l">Peak kW</div></div>
+      <div class="kpi money"><div class="v" id="k_inc">$0</div><div class="l">Incentive</div></div>
+      <div class="kpi"><div class="v" id="k_pb">—</div><div class="l">Payback, yrs (net)</div></div>
+    </div>
+    <div class="legend"><span><i style="background:#8a97a3"></i>Existing kW</span><span><i style="background:#1c7c4a"></i>Proposed kW</span></div>
+    <div class="chartwrap"><canvas id="shape" width="600" height="300"></canvas>
+      <div class="note" id="shapenote">Average weekday load shape (project total). 8760 available in Excel export.</div></div>
+    <div class="flags" id="flags"></div>
+  </section>
+</aside>
+</main>
+<footer id="stamp"></footer>
+<script src="js/schedules.js"></script>
+<script src="js/profiles.js"></script>
+<script src="js/wattage-tables.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/import-paste.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/export-excel.js"></script>
+<script src="js/export-excel-single.js"></script>
+<div id="settingsmodal" style="display:none;position:fixed;inset:0;background:rgba(20,30,40,.55);z-index:100;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 16px">
+  <div style="background:#fff;border-radius:8px;max-width:920px;width:100%;padding:20px 24px 26px;box-shadow:0 10px 40px rgba(0,0,0,.35)">
+    <h2 style="font-size:15px;margin-bottom:4px">Program profile settings</h2>
+    <div class="note" style="margin-bottom:10px">Client-specific parameters for the selected profile. Every value here appears on the Assumptions tab of exports with its citation. Edits require a change note and bump the profile version.</div>
+    <div id="settingsbody"></div>
+  </div>
+</div>
+</body>
+</html>
