@@ -1,148 +1,254 @@
-/* import-paste.js — paste spreadsheet data (Excel/Sheets clipboard = TSV)
-   into the line-item grid. Flow: paste → parse → auto-map columns by header
-   synonyms → preview with editable mapping → import.
-   CSV fallback supported for .csv text pastes. */
+/* settings.js — schema-driven client profile editor.
+   PROFILE_SCHEMA is the formal contract for what a program profile contains.
+   The editor renders from the schema, so new parameters (e.g. future LPD
+   tables, NTG, EUL/RUL) appear automatically once described here.
+   Governance: profiles are read-only until edited; saving requires a change
+   note and bumps the version; edited profiles are exported as JSON for repo
+   commit. localStorage holds only an unsaved-draft recovery copy. */
 
-const IMPORT_FIELDS = [
-  { id:"skip",      label:"— skip —" },
-  { id:"space",     label:"Space / location", syn:["space","location","room","area","description","loc"] },
-  { id:"spaceType", label:"Space type",       syn:["space type","spacetype","type","usage","schedule"] },
-  { id:"exCode",    label:"Existing fixture", syn:["existing fixture","existing","ex fixture","baseline","existing code","fixture code existing","existing type"] },
-  { id:"exW",       label:"Existing watts",   syn:["existing watts","ex w","ex watts","baseline watts","existing wattage","watts existing"] },
-  { id:"qty",       label:"Quantity",         syn:["qty","quantity","count","fixtures","# fixtures","number"] },
-  { id:"prCode",    label:"Proposed fixture", syn:["proposed fixture","proposed","new fixture","retrofit","proposed code","led","proposed type"] },
-  { id:"prW",       label:"Proposed watts",   syn:["proposed watts","pr w","new watts","proposed wattage","watts proposed","led watts"] },
-  { id:"control",   label:"Controls",         syn:["controls","control","sensor","control type"] },
-  { id:"hou",       label:"Annual hours",     syn:["hou","hours","annual hours","operating hours","hrs","run hours"] },
-  { id:"cost",      label:"Cost $",           syn:["cost","installed cost","price","total cost","cost $","material + labor"] }
+const PROFILE_SCHEMA = [
+  { group:"Calculation mode", fields:[
+    { path:"mode", label:"Output mode", type:"select", options:["annual","8760"],
+      help:"8760 = hourly engine with schedule-based shapes and peak-window demand (Xcel-style). Annual = flat HOU × factors with coincidence factors." }
+  ]},
+  { group:"Peak demand definition (8760 mode)", showIf:p=>p.mode==="8760", fields:[
+    { path:"peakWindow.months", label:"Peak months (1–12)", type:"intlist", min:1, max:12,
+      help:"Months included in the peak window, comma-separated (e.g. 6,7,8 for Jun–Aug)." },
+    { path:"peakWindow.hourStart", label:"Window start hour (0–23)", type:"number", min:0, max:23 },
+    { path:"peakWindow.hourEnd", label:"Window end hour (1–24)", type:"number", min:1, max:24 },
+    { path:"peakWindow.weekdaysOnly", label:"Weekdays only", type:"bool" }
+  ]},
+  { group:"Coincidence factors (annual mode)", showIf:p=>p.mode==="annual", fields:[
+    { path:"coincidenceFactor.office",    label:"Office CF",     type:"number", min:0, max:1 },
+    { path:"coincidenceFactor.warehouse", label:"Warehouse CF",  type:"number", min:0, max:1 },
+    { path:"coincidenceFactor.retail",    label:"Retail CF",     type:"number", min:0, max:1 },
+    { path:"coincidenceFactor.cont24",    label:"24/7 CF",       type:"number", min:0, max:1 },
+    { path:"coincidenceFactor.exterior",  label:"Exterior CF",   type:"number", min:0, max:1 },
+    { path:"coincidenceFactor.school",    label:"School CF",     type:"number", min:0, max:1 },
+    { path:"coincidenceFactor.source",    label:"CF source citation", type:"text", sourceReq:true }
+  ]},
+  { group:"Interactive effects", fields:[
+    { path:"interactiveEffects.variesBySpaceType", label:"Varies by space type", type:"bool",
+      help:"On: each space type uses its own kWh/kW factors below; unlisted types use the flat factors. Off: the flat factors apply to every line." },
+    { path:"interactiveEffects.kwhFactor", label:"kWh factor (flat / fallback)", type:"number", min:0.8, max:1.5,
+      help:"Multiplier on energy savings for HVAC interaction. 1.0 = no effect. Used for all lines when 'varies' is off, and as the fallback for unlisted space types when it is on." },
+    { path:"interactiveEffects.kwFactor", label:"kW factor (flat / fallback)", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.defaultOn", label:"Apply by default", type:"bool",
+      help:"Sets the calculator's IE toggle default when this profile is selected. Users can still toggle per project." },
+    { path:"interactiveEffects.source", label:"IE source citation", type:"text", sourceReq:true }
+  ]},
+  { group:"Interactive effects by space type", showIf:p=>p.interactiveEffects && p.interactiveEffects.variesBySpaceType, fields:[
+    { path:"interactiveEffects.byType.office.kwh",    label:"Office — kWh", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.office.kw",     label:"Office — kW",  type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.warehouse.kwh", label:"Warehouse — kWh", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.warehouse.kw",  label:"Warehouse — kW",  type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.retail.kwh",    label:"Retail — kWh", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.retail.kw",     label:"Retail — kW",  type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.cont24.kwh",    label:"24/7 — kWh", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.cont24.kw",     label:"24/7 — kW",  type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.exterior.kwh",  label:"Exterior — kWh", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.exterior.kw",   label:"Exterior — kW",  type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.school.kwh",    label:"School — kWh", type:"number", min:0.8, max:1.5 },
+    { path:"interactiveEffects.byType.school.kw",     label:"School — kW",  type:"number", min:0.8, max:1.5 }
+  ]},
+  { group:"Controls savings factors", fields:[
+    { path:"controlsFactors.occ",      label:"Occupancy sensor SF", type:"number", min:0, max:0.9 },
+    { path:"controlsFactors.daylight", label:"Daylighting SF",      type:"number", min:0, max:0.9 },
+    { path:"controlsFactors.nlc",      label:"Networked (NLC) SF",  type:"number", min:0, max:0.9 },
+    { path:"controlsFactors.source",   label:"Controls source citation", type:"text", sourceReq:true }
+  ]},
+  { group:"Incentive rules", fields:[
+    { path:"incentive.type", label:"Basis", type:"select", options:["perKWh","perKW"] },
+    { path:"incentive.rate", label:"Rate ($/unit)", type:"number", min:0, max:5 },
+    { path:"incentive.capPctOfCost", label:"Cap (fraction of cost)", type:"number", min:0, max:1,
+      help:"e.g. 0.5 caps incentive at 50% of project cost. Set 1 for no practical cap." },
+    { path:"incentive.label", label:"Offer description", type:"text" },
+    { path:"incentive.source", label:"Incentive source citation", type:"text", sourceReq:true }
+  ]},
+  { group:"Measure life & documentation", fields:[
+    { path:"measureLifeYrs", label:"Measure life (yrs)", type:"number", min:1, max:30 },
+    { path:"houSource", label:"Hours-of-use basis note", type:"text", sourceReq:true }
+  ]}
 ];
 
-let IMPORT_GRID = null; // parsed rows cache
+let SHIPPED_PROFILES = null;   // deep copy taken at load for revert
+let EDIT = null;               // working copy being edited
 
-function parseClipboardTable(text){
-  text = text.replace(/\r\n?/g,"\n").replace(/\n+$/,"");
-  if(!text.trim()) return [];
-  const delim = text.includes("\t") ? "\t" : ",";
-  return text.split("\n").map(line => delim === "\t"
-    ? line.split("\t")
-    : splitCsvLine(line));
-}
-function splitCsvLine(line){ // minimal quoted-CSV splitter
-  const out=[]; let cur="",q=false;
-  for(let i=0;i<line.length;i++){ const c=line[i];
-    if(c==='"'){ if(q&&line[i+1]==='"'){cur+='"';i++;} else q=!q; }
-    else if(c===","&&!q){ out.push(cur); cur=""; }
-    else cur+=c; }
-  out.push(cur); return out;
-}
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+function getPath(o,p){ return p.split(".").reduce((a,k)=>a&&a[k],o); }
+function setPath(o,p,v){ const ks=p.split("."); let t=o; for(let i=0;i<ks.length-1;i++){ if(t[ks[i]]==null) t[ks[i]]={}; t=t[ks[i]]; } t[ks[ks.length-1]]=v; }
 
-function guessMapping(headerRow){
-  return headerRow.map(h=>{
-    const t=(h||"").trim().toLowerCase();
-    if(!t) return "skip";
-    for(const f of IMPORT_FIELDS){ if(f.syn && f.syn.includes(t)) return f.id; }
-    for(const f of IMPORT_FIELDS){ if(f.syn && f.syn.some(s=>t.includes(s)||s.includes(t))) return f.id; }
-    return "skip";
-  });
-}
-
-function headerLooksLikeHeader(row){
-  // header if most cells are non-numeric text
-  const nonNum = row.filter(c=>c.trim() && isNaN(parseFloat(c))).length;
-  return nonNum >= Math.max(2, row.length/2);
-}
-
-function onPaste(ev){
-  const text=(ev.clipboardData||window.clipboardData).getData("text");
-  ev.preventDefault();
-  const grid=parseClipboardTable(text);
-  if(!grid.length){ $("importmsg").textContent="Nothing usable on the clipboard — copy a cell range from Excel and paste again."; return; }
-  IMPORT_GRID = grid;
-  renderImportPreview();
-}
-
-function renderImportPreview(){
-  const grid=IMPORT_GRID;
-  const hasHeader=headerLooksLikeHeader(grid[0]);
-  const cols=Math.max(...grid.map(r=>r.length));
-  const map=hasHeader ? guessMapping(grid[0]) : new Array(cols).fill("skip");
-  const dataRows = hasHeader ? grid.slice(1) : grid;
-
-  let html=`<div class="note" style="margin-bottom:8px">${dataRows.length} data row(s) detected${hasHeader?", header row recognized":", no header row detected — set column mapping manually"}. Adjust the mapping dropdowns, then import.</div>`;
-  html+='<div style="overflow-x:auto"><table class="lines"><thead><tr>';
-  for(let c=0;c<cols;c++){
-    html+=`<th><select class="mapsel" data-col="${c}">${IMPORT_FIELDS.map(f=>`<option value="${f.id}" ${f.id===(map[c]||"skip")?"selected":""}>${f.label}</option>`).join("")}</select></th>`;
+function openSettings(){
+  if(!SHIPPED_PROFILES) SHIPPED_PROFILES = deepClone(PROFILES);
+  EDIT = deepClone(currentProfile());
+  const draft = safeGet("lightcalc_profile_draft_"+EDIT.id);
+  if(draft){
+    if(confirm("An unsaved profile draft was found for "+EDIT.label+". Recover it?")) EDIT = JSON.parse(draft);
+    else safeDel("lightcalc_profile_draft_"+EDIT.id);
   }
-  html+="</tr></thead><tbody>";
-  dataRows.slice(0,8).forEach(r=>{
-    html+="<tr>"+Array.from({length:cols},(_,c)=>`<td style="font-family:var(--mono);font-size:11.5px;color:#51606e">${esc(r[c]||"")}</td>`).join("")+"</tr>";
-  });
-  if(dataRows.length>8) html+=`<tr><td colspan="${cols}" class="note">… ${dataRows.length-8} more row(s)</td></tr>`;
-  html+="</tbody></table></div>";
-  html+=`<div style="margin-top:10px"><button class="importbtn" onclick="commitImport(${hasHeader})">Import ${dataRows.length} line item(s)</button>
-         <button class="importbtn ghost" onclick="cancelImport()">Cancel</button></div>`;
-  $("importpreview").innerHTML=html;
-  $("importmsg").textContent="";
+  renderSettings();
+  document.getElementById("settingsmodal").style.display="flex";
 }
+function closeSettings(){ document.getElementById("settingsmodal").style.display="none"; EDIT=null; }
 
-function commitImport(hasHeader){
-  const grid=IMPORT_GRID;
-  const dataRows=hasHeader?grid.slice(1):grid;
-  const map=[...document.querySelectorAll(".mapsel")].map(s=>s.value);
-  const p=currentProfile();
-  let added=0, unmatched=0;
+function renderSettings(){
+  const el=document.getElementById("settingsbody");
+  let h=`<div class="sethead">
+    <div><b>${esc(EDIT.label)}</b><div class="note">id <code>${EDIT.id}</code> · version <code>${EDIT.version}</code> · schema ${EDIT.schemaVersion}</div></div>
+    <div class="setflags" id="setflags"></div></div>`;
 
-  for(const r of dataRows){
-    if(!r.some(c=>c && c.trim())) continue;
-    const raw={};
-    map.forEach((f,c)=>{ if(f!=="skip") raw[f]=(r[c]||"").trim(); });
-
-    const ln=mkLine({});
-    if(raw.space) ln.space=raw.space;
-    if(raw.spaceType){
-      const st=matchSpaceType(raw.spaceType);
-      if(st){ ln.spaceType=st; ln.hou=scheduleHOU(st); }
+  for(const g of PROFILE_SCHEMA){
+    if(g.showIf && !g.showIf(EDIT)) continue;
+    h+=`<h3>${g.group}</h3><div class="setgrid">`;
+    for(const f of g.fields){
+      const v=getPath(EDIT,f.path);
+      const tip=f.help?`<span class="info" data-tip="${esc(f.help)}">i</span>`:"";
+      if(f.type==="bool"){
+        h+=`<label class="field setrow"><b>${f.label} ${tip}</b><input type="checkbox" ${v?"checked":""} onchange="setEdit('${f.path}',this.checked,'bool')" style="width:auto"></label>`;
+      } else if(f.type==="select"){
+        h+=`<label class="field setrow"><b>${f.label} ${tip}</b><select onchange="setEdit('${f.path}',this.value,'select')">${f.options.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("")}</select></label>`;
+      } else if(f.type==="intlist"){
+        h+=`<label class="field setrow"><b>${f.label} ${tip}</b><input value="${(v||[]).join(",")}" onchange="setEdit('${f.path}',this.value,'intlist')"></label>`;
+      } else {
+        const cls=(f.sourceReq && !(v&&String(v).trim()))?"missing":"";
+        h+=`<label class="field setrow"><b>${f.label} ${tip}</b><input class="${cls}" type="${f.type==="number"?"number":"text"}" ${f.type==="number"?'step="any"':""} value="${v??""}" onchange="setEdit('${f.path}',this.value,'${f.type}')"></label>`;
+      }
     }
-    if(raw.qty) ln.qty=parseFloat(raw.qty)||1;
-    if(raw.cost) ln.cost=parseFloat(String(raw.cost).replace(/[$,]/g,""))||0;
-
-    // fixtures: try table match on text; explicit watt columns win
-    if(raw.exCode){ ln.exCode=raw.exCode;
-      const f=findFixture(p.wattageTable,raw.exCode); if(f){ln.exCode=f.code; ln.exW=f.watts;} else unmatched++; }
-    if(raw.exW) ln.exW=parseFloat(raw.exW)||ln.exW;
-    if(raw.prCode){ ln.prCode=raw.prCode;
-      const f=findFixture(p.wattageTable,raw.prCode); if(f){ln.prCode=f.code; ln.prW=f.watts;} else unmatched++; }
-    if(raw.prW) ln.prW=parseFloat(raw.prW)||ln.prW;
-
-    if(raw.control){ const c=matchControl(raw.control); if(c) ln.control=c; }
-    if(raw.hou){ const h=parseFloat(raw.hou);
-      if(h>0){ ln.hou=h; ln.houProv = Math.abs(h-scheduleHOU(ln.spaceType))<1 ? "default" : "override"; } }
-
-    LINES.push(ln); added++;
+    h+=`</div>`;
   }
-  cancelImport();
+
+  // wattage table editor
+  const wt=WATTAGE_TABLES[EDIT.wattageTable];
+  h+=`<h3>Wattage table <span class="hint" style="font-weight:400;text-transform:none">— ${esc(wt.label)} · shared across profiles that reference it · paste rows from Excel (code, description, watts)</span></h3>
+  <div id="wtzone" contenteditable="true" spellcheck="false" class="pastebox" onpaste="onWattagePaste(event)" oninput="this.textContent='Click here, then paste (Ctrl+V) — columns: code, description, watts'">Click here, then paste (Ctrl+V) — columns: code, description, watts</div>
+  <table class="lines" style="margin-top:8px"><thead><tr><th>Code</th><th>Description</th><th>Watts</th><th style="width:36px"></th></tr></thead><tbody>`;
+  wt.fixtures.forEach((f,i)=>{
+    h+=`<tr><td><input value="${esc(f.code)}" onchange="updWatt(${i},'code',this.value)"></td>
+      <td><input value="${esc(f.desc)}" onchange="updWatt(${i},'desc',this.value)" style="font-family:var(--sans)"></td>
+      <td><input type="number" value="${f.watts}" onchange="updWatt(${i},'watts',this.value)" style="width:70px"></td>
+      <td><button class="rowbtn" onclick="delWatt(${i})">✕</button></td></tr>`;
+  });
+  h+=`</tbody></table><div class="addrow"><button onclick="addWatt()">+ Add fixture</button></div>`;
+
+  // save bar
+  h+=`<h3>Save changes</h3>
+  <div class="setgrid">
+    <label class="field" style="grid-column:1/-1"><b>Change note (required to save)</b><input id="changenote" placeholder="e.g. Updated NLC factor to MN TRM v4.1 Table 3.2"></label>
+  </div>
+  <div class="setactions">
+    <button class="importbtn" onclick="saveProfileEdits()">Apply &amp; bump version</button>
+    <button class="importbtn ghost" onclick="exportProfileJson()">Export profile JSON</button>
+    <button class="importbtn ghost" onclick="document.getElementById('profimport').click()">Import profile JSON</button>
+    <input type="file" id="profimport" accept=".json" style="display:none" onchange="importProfileJson(event)">
+    <button class="importbtn ghost" onclick="revertProfile()">Revert to shipped</button>
+    <button class="importbtn ghost" onclick="closeSettings()">Close</button>
+  </div>
+  <div class="note">Applied edits live in this browser session and are stamped on all outputs. To distribute to the team, export the JSON and commit it to <code>js/profiles/</code>. Unsaved edits are kept as a local draft for recovery only.</div>`;
+  el.innerHTML=h;
+  validateProfile();
+}
+
+function setEdit(path,val,type){
+  if(type==="number") val=parseFloat(val);
+  if(type==="intlist") val=String(val).split(",").map(s=>parseInt(s.trim())).filter(n=>!isNaN(n));
+  setPath(EDIT,path,val);
+  safeSet("lightcalc_profile_draft_"+EDIT.id, JSON.stringify(EDIT));
+  if(path==="mode"||path==="interactiveEffects.variesBySpaceType") renderSettings(); else validateProfile();
+}
+
+function validateProfile(){
+  const flags=[];
+  for(const g of PROFILE_SCHEMA){
+    if(g.showIf && !g.showIf(EDIT)) continue;
+    for(const f of g.fields){
+      const v=getPath(EDIT,f.path);
+      if(f.type==="number" && v!=null && (v<f.min || v>f.max))
+        flags.push(`${f.label}: ${v} outside expected range ${f.min}–${f.max}`);
+      if(f.sourceReq && !(v&&String(v).trim()))
+        flags.push(`${f.label}: source citation missing`);
+      if(f.type==="intlist" && (v||[]).some(n=>n<f.min||n>f.max))
+        flags.push(`${f.label}: values must be ${f.min}–${f.max}`);
+    }
+  }
+  if(EDIT.mode==="8760" && EDIT.peakWindow && EDIT.peakWindow.hourEnd<=EDIT.peakWindow.hourStart)
+    flags.push("Peak window: end hour must be after start hour");
+  const el=document.getElementById("setflags");
+  if(el) el.innerHTML=flags.length
+    ? flags.map(f=>`<div class="flag-item">${f}</div>`).join("")
+    : `<div class="flag-item ok">Profile valid. All ranges OK, citations present.</div>`;
+  return flags;
+}
+
+function saveProfileEdits(){
+  const note=document.getElementById("changenote").value.trim();
+  if(!note){ alert("A change note is required — it becomes part of the profile's change log."); return; }
+  const warn=validateProfile();
+  if(warn.length && !confirm("Profile has "+warn.length+" validation warning(s). Apply anyway?")) return;
+  // bump version: 2026.1 -> 2026.1-e1 -> 2026.1-e2 ...
+  const m=EDIT.version.match(/^(.*?)(?:-e(\d+))?$/);
+  EDIT.version=m[1]+"-e"+((parseInt(m[2])||0)+1);
+  EDIT.changeLog=EDIT.changeLog||[];
+  EDIT.changeLog.push({date:new Date().toISOString(), note});
+  PROFILES[EDIT.id]=deepClone(EDIT);
+  safeDel("lightcalc_profile_draft_"+EDIT.id);
+  closeSettings();
+  onProfileChange();
+}
+
+function revertProfile(){
+  if(!confirm("Discard all edits and restore the shipped "+EDIT.label+" profile?")) return;
+  PROFILES[EDIT.id]=deepClone(SHIPPED_PROFILES[EDIT.id]);
+  EDIT=deepClone(SHIPPED_PROFILES[EDIT.id]);
+  safeDel("lightcalc_profile_draft_"+EDIT.id);
+  renderSettings(); onProfileChange();
+}
+
+function exportProfileJson(){
+  const blob=new Blob([JSON.stringify(EDIT,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="profile_"+EDIT.id+"_"+EDIT.version.replace(/\W+/g,"_")+".json"; a.click();
+}
+function importProfileJson(ev){
+  const f=ev.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const p=JSON.parse(r.result);
+      if(!p.id || !p.schemaVersion) throw new Error("not a profile file (missing id/schemaVersion)");
+      if(p.schemaVersion!==1) throw new Error("schema version "+p.schemaVersion+" not supported by this build");
+      PROFILES[p.id]=p; EDIT=deepClone(p);
+      // refresh selector if new profile id
+      const ps=document.getElementById("profile");
+      if(![...ps.options].some(o=>o.value===p.id)){ const o=document.createElement("option"); o.value=p.id; o.textContent=p.label; ps.appendChild(o); }
+      ps.value=p.id;
+      renderSettings(); onProfileChange();
+    }catch(e){ alert("Could not import profile: "+e.message); } };
+  r.readAsText(f); ev.target.value="";
+}
+
+/* wattage table edits (shared table object) */
+function updWatt(i,field,val){ const t=WATTAGE_TABLES[EDIT.wattageTable].fixtures[i];
+  t[field]=field==="watts"?(parseFloat(val)||0):val; refreshFixList(); }
+function addWatt(){ WATTAGE_TABLES[EDIT.wattageTable].fixtures.push({code:"NEW",desc:"",watts:0}); renderSettings(); }
+function delWatt(i){ WATTAGE_TABLES[EDIT.wattageTable].fixtures.splice(i,1); renderSettings(); refreshFixList(); }
+function onWattagePaste(ev){
+  const text=(ev.clipboardData||window.clipboardData).getData("text"); ev.preventDefault();
+  const rows=parseClipboardTable(text);
+  let added=0;
+  for(const r of rows){
+    if(r.length<3) continue;
+    const w=parseFloat(r[2]); if(isNaN(w)) continue; // skips header rows automatically
+    WATTAGE_TABLES[EDIT.wattageTable].fixtures.push({code:r[0].trim().toUpperCase(),desc:r[1].trim(),watts:w});
+    added++;
+  }
+  renderSettings(); refreshFixList();
+  if(!added) alert("No rows imported — expected 3 columns: code, description, watts.");
+}
+function refreshFixList(){
+  const dl=document.getElementById("fixlist"); dl.innerHTML="";
+  WATTAGE_TABLES.std_v1.fixtures.forEach(f=>{ const o=document.createElement("option"); o.value=f.code; o.label=f.desc; dl.appendChild(o); });
   render();
-  $("importmsg").textContent=`Imported ${added} line(s).`+(unmatched?` ${unmatched} fixture description(s) had no wattage-table match — enter watts manually or refine codes (flagged rows show 0 W).`:"");
 }
 
-function cancelImport(){ IMPORT_GRID=null; $("importpreview").innerHTML=""; }
-
-function matchSpaceType(text){
-  const t=text.toLowerCase();
-  for(const k in SCHEDULES){ if(k===t || SCHEDULES[k].label.toLowerCase().includes(t) || t.includes(k)) return k; }
-  if(/24|cont/.test(t)) return "cont24";
-  if(/ext|park|outdoor|site/.test(t)) return "exterior";
-  if(/ware|storage|shop|mfg|manuf/.test(t)) return "warehouse";
-  if(/off|admin|conf/.test(t)) return "office";
-  if(/retail|store|sales/.test(t)) return "retail";
-  if(/school|class/.test(t)) return "school";
-  return null;
-}
-function matchControl(text){
-  const t=text.toLowerCase();
-  if(/nlc|network|lumin/.test(t)) return "nlc";
-  if(/day|photo/.test(t)) return "daylight";
-  if(/occ|motion|vac|sensor/.test(t)) return "occ";
-  if(/none|no|n\/a|-/.test(t)) return "none";
-  return null;
-}
+function safeGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function safeSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function safeDel(k){ try{ localStorage.removeItem(k); }catch(e){} }

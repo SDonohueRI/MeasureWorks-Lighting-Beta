@@ -1,186 +1,54 @@
-/* ui.js — DOM handling, input grid, autocomplete, live results, chart,
-   provenance tags, save/load, autosave. Engine stays in engine.js. */
+/* schedules.js — schedule library and 8760 generation.
+   Schedules are stored compactly as 24-hr weekday/weekend fraction-on profiles;
+   the full 8760 is generated on demand (2026 calendar, Jan 1 = Thursday).
+   Values are fraction of connected load operating in that hour (0–1). */
 
-let LINES = [];
-let nextId = 1;
-const PROV_CYCLE = ["default","override","metered"];
+const SCHEDULES = {
+  office:      { label:"Office",              wd:[0,0,0,0,0,.1,.3,.7,.95,1,1,1,1,1,1,1,.9,.7,.4,.2,.1,.05,0,0],
+                 we:[0,0,0,0,0,0,.05,.1,.15,.2,.2,.2,.2,.2,.15,.1,.1,.05,0,0,0,0,0,0] },
+  warehouse:   { label:"Warehouse (2-shift)",  wd:[.1,.1,.1,.1,.1,.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,.6,.2,.1],
+                 we:[.1,.1,.1,.1,.1,.2,.4,.4,.4,.4,.4,.4,.4,.4,.4,.4,.3,.2,.1,.1,.1,.1,.1,.1] },
+  retail:      { label:"Retail",              wd:[0,0,0,0,0,.1,.3,.8,1,1,1,1,1,1,1,1,1,1,1,1,.8,.4,.1,0],
+                 we:[0,0,0,0,0,.05,.2,.6,1,1,1,1,1,1,1,1,1,1,1,.9,.6,.3,.05,0] },
+  cont24:      { label:"24/7 Continuous",      wd:Array(24).fill(1), we:Array(24).fill(1) },
+  exterior:    { label:"Exterior (dusk-dawn)", wd:[1,1,1,1,1,1,.5,0,0,0,0,0,0,0,0,0,0,0,.3,1,1,1,1,1],
+                 we:[1,1,1,1,1,1,.5,0,0,0,0,0,0,0,0,0,0,0,.3,1,1,1,1,1] },
+  school:      { label:"School (K-12)",        wd:[0,0,0,0,0,.05,.4,.9,1,1,1,1,1,1,1,.8,.5,.3,.15,.1,.05,0,0,0],
+                 we:[0,0,0,0,0,0,.05,.1,.15,.15,.15,.15,.1,.1,.1,.05,0,0,0,0,0,0,0,0] }
+};
 
-function $(id){ return document.getElementById(id); }
-function currentProfile(){ return PROFILES[$("profile").value]; }
-
-function init(){
-  const ps = $("profile");
-  for(const k in PROFILES){ const o=document.createElement("option"); o.value=k; o.textContent=PROFILES[k].label; ps.appendChild(o); }
-  const bs = $("bldg");
-  for(const k in SCHEDULES){ const o=document.createElement("option"); o.value=k; o.textContent=SCHEDULES[k].label; bs.appendChild(o); }
-  const dl = $("fixlist");
-  WATTAGE_TABLES.std_v1.fixtures.forEach(f=>{ const o=document.createElement("option"); o.value=f.code; o.label=f.desc; dl.appendChild(o); });
-
-  let saved=null; try{ saved = localStorage.getItem("lightcalc_autosave"); }catch(e){}
-  if(saved){ try{ restore(JSON.parse(saved)); } catch(e){ seed(); } } else seed();
-  onProfileChange(true);
+// Annual HOU implied by a schedule (used for annual-mode defaults and display)
+function scheduleHOU(key){
+  const s = SCHEDULES[key];
+  const wd = s.wd.reduce((a,b)=>a+b,0), we = s.we.reduce((a,b)=>a+b,0);
+  return Math.round(wd*261 + we*104); // 2026: 261 weekdays, 104 weekend days
 }
 
-function seed(){
-  LINES = [
-    mkLine({space:"Open office 2F", spaceType:"office", exCode:"3L4FT32-T8", qty:48, prCode:"LED-TROFFER-2X4-32", control:"occ", cost:9600}),
-    mkLine({space:"Warehouse high bay", spaceType:"warehouse", exCode:"MH-400", qty:22, prCode:"LED-HB-150", control:"nlc", cost:13200}),
-    mkLine({space:"Parking lot", spaceType:"exterior", exCode:"HPS-250", qty:12, prCode:"LED-AREA-110", control:"none", cost:7800})
-  ];
-}
-
-function mkLine(p){
-  const ex = findFixture("std_v1", p.exCode||""), pr = findFixture("std_v1", p.prCode||"");
-  const st = p.spaceType || $("bldg").value || "office";
-  return { id:nextId++, space:p.space||"", spaceType:st,
-    exCode:p.exCode||"", exW:p.exW ?? (ex?ex.watts:0),
-    qty:p.qty||1, prCode:p.prCode||"", prW:p.prW ?? (pr?pr.watts:0),
-    control:p.control||"none", hou:p.hou ?? scheduleHOU(st), houProv:p.houProv||"default",
-    cost:p.cost||0 };
-}
-
-function addRow(){ LINES.push(mkLine({})); render(); }
-function dupRow(id){ const l=LINES.find(x=>x.id===id); const c={...l}; c.id=nextId++; LINES.splice(LINES.indexOf(l)+1,0,c); render(); }
-function delRow(id){ LINES = LINES.filter(x=>x.id!==id); render(); }
-
-function upd(id, field, val){
-  const l = LINES.find(x=>x.id===id); if(!l) return;
-  if(field==="exCode"||field==="prCode"){
-    l[field]=val;
-    const f=findFixture(currentProfile().wattageTable,val);
-    if(f) l[field==="exCode"?"exW":"prW"]=f.watts;
-    render(); return;
+// Generate normalized 8760 array for a schedule key. 2026-01-01 is a Thursday (dow=4).
+function schedule8760(key){
+  const s = SCHEDULES[key], out = new Float32Array(8760);
+  for(let d=0; d<365; d++){
+    const dow = (4 + d) % 7;                 // 0=Sun … 6=Sat
+    const prof = (dow===0 || dow===6) ? s.we : s.wd;
+    for(let h=0; h<24; h++) out[d*24+h] = prof[h];
   }
-  if(field==="spaceType"){
-    l.spaceType=val;
-    if(l.houProv==="default") l.hou=scheduleHOU(val);
-    render(); return;
+  return out;
+}
+
+/* Controls factors reshape a schedule rather than flat-scaling, where sensible:
+   occupancy: scale occupied hours by (1-sf); daylighting: reduce 9am–4pm hours. */
+function applyControls(arr8760, control, profile){
+  const sf = (profile.controlsFactors[control] || 0);
+  if(!sf) return arr8760;
+  const out = new Float32Array(8760);
+  for(let i=0;i<8760;i++){
+    const h = i % 24;
+    if(control === "daylight"){
+      out[i] = (h>=9 && h<16) ? arr8760[i]*(1-sf*2) : arr8760[i]; // concentrate in daylight hours, ~equivalent annual effect
+      if(out[i] < 0) out[i] = 0;
+    } else {
+      out[i] = arr8760[i]*(1-sf);
+    }
   }
-  if(field==="hou"){ l.hou=+val||0; if(l.houProv==="default") l.houProv="override"; render(); return; }
-  if(["exW","prW","qty","cost"].includes(field)) l[field]=+val||0; else l[field]=val;
-  recalc();
+  return out;
 }
-
-function cycleProv(id){
-  const l=LINES.find(x=>x.id===id);
-  const i=(PROV_CYCLE.indexOf(l.houProv)+1)%3;
-  l.houProv=PROV_CYCLE[i];
-  if(l.houProv==="default") l.hou=scheduleHOU(l.spaceType);
-  render();
-}
-
-function render(){
-  const tb=$("rows"); tb.innerHTML="";
-  const res=calcProject(LINES, currentProfile(), $("ie_toggle").checked);
-  LINES.forEach((l,i)=>{
-    const lr=res.lines[i];
-    const tr=document.createElement("tr");
-    tr.innerHTML=`
-      <td style="color:#8a97a3;font-family:var(--mono)">${i+1}</td>
-      <td><input value="${esc(l.space)}" oninput="upd(${l.id},'space',this.value)" style="font-family:var(--sans);min-width:110px"></td>
-      <td><select onchange="upd(${l.id},'spaceType',this.value)">${Object.keys(SCHEDULES).map(k=>`<option value="${k}" ${k===l.spaceType?"selected":""}>${SCHEDULES[k].label}</option>`).join("")}</select></td>
-      <td><input list="fixlist" value="${esc(l.exCode)}" onchange="upd(${l.id},'exCode',this.value)" style="min-width:120px"></td>
-      <td><input type="number" value="${l.exW}" onchange="upd(${l.id},'exW',this.value)" style="width:62px"></td>
-      <td><input type="number" value="${l.qty}" onchange="upd(${l.id},'qty',this.value)" style="width:56px"></td>
-      <td><input list="fixlist" value="${esc(l.prCode)}" onchange="upd(${l.id},'prCode',this.value)" style="min-width:120px"></td>
-      <td><input type="number" value="${l.prW}" onchange="upd(${l.id},'prW',this.value)" style="width:62px"></td>
-      <td><select onchange="upd(${l.id},'control',this.value)">${CONTROL_OPTIONS.map(c=>`<option value="${c.id}" ${c.id===l.control?"selected":""}>${c.label}</option>`).join("")}</select></td>
-      <td style="white-space:nowrap"><input type="number" value="${l.hou}" onchange="upd(${l.id},'hou',this.value)" style="width:66px"> <span class="tag ${l.houProv}" title="Click to cycle provenance" onclick="cycleProv(${l.id})">${l.houProv.toUpperCase().slice(0,3)}</span></td>
-      <td><input type="number" value="${l.cost}" onchange="upd(${l.id},'cost',this.value)" style="width:78px"></td>
-      <td class="rowsave">${fmt(lr?lr.kwh:0,0)}</td>
-      <td><button class="rowbtn" title="Duplicate line" onclick="dupRow(${l.id})">⧉</button><button class="rowbtn" title="Delete line" onclick="delRow(${l.id})">✕</button></td>`;
-    tb.appendChild(tr);
-  });
-  recalc(res);
-}
-
-function recalc(pre){
-  const p=currentProfile();
-  const res=pre||calcProject(LINES,p,$("ie_toggle").checked);
-  $("k_kwh").textContent=fmt(res.kwh,0);
-  $("k_kw").textContent=fmt(res.kw,1);
-  $("k_inc").textContent="$"+fmt(res.incentive,0);
-  const rate=+$("rate").value||0;
-  const annualSavings=res.kwh*rate;
-  const net=res.cost-res.incentive;
-  $("k_pb").textContent=(annualSavings>0&&res.cost>0)?(net/annualSavings).toFixed(1):"—";
-  // update per-row kWh cells without full re-render
-  const cells=document.querySelectorAll("td.rowsave");
-  res.lines.forEach((l,i)=>{ if(cells[i]) cells[i].textContent=fmt(l.kwh,0); });
-
-  const flags=sanityChecks(LINES,res);
-  $("flags").innerHTML=flags.map(f=>`<div class="flag-item ${f.level}">${f.msg}</div>`).join("");
-  drawShape(res,p);
-  $("stamp").textContent=`profile ${p.id} v${p.version} · schema ${p.schemaVersion} · mode ${p.mode} · engine v0.1 · ${new Date().toISOString().slice(0,10)}`;
-  try{ localStorage.setItem("lightcalc_autosave", JSON.stringify(snapshot())); }catch(e){}
-}
-
-function drawShape(res,p){
-  const cv=$("shape"), ctx=cv.getContext("2d");
-  ctx.clearRect(0,0,cv.width,cv.height);
-  let ex=new Array(24).fill(0), pr=new Array(24).fill(0);
-  if(p.mode==="8760"&&res.hourlyEx){
-    let n=0;
-    for(let d=0;d<365;d++){ const dow=(4+d)%7; if(dow===0||dow===6)continue; n++;
-      for(let h=0;h<24;h++){ ex[h]+=res.hourlyEx[d*24+h]; pr[h]+=res.hourlyPr[d*24+h]; } }
-    ex=ex.map(v=>v/n); pr=pr.map(v=>v/n);
-    $("shapenote").textContent="Average weekday load shape (project total kW). Full 8760 included in Excel export.";
-  } else {
-    // annual mode: show connected kW as flat bars over default office shape for context
-    for(const l of LINES){ const s=SCHEDULES[l.spaceType];
-      for(let h=0;h<24;h++){ ex[h]+=l.exW*l.qty/1000*s.wd[h]; pr[h]+=l.prW*l.qty/1000*s.wd[h]*(1-(p.controlsFactors[l.control]||0)); } }
-    $("shapenote").textContent="Illustrative weekday shape from schedule library. Annual mode — savings use flat HOU × CF math.";
-  }
-  const max=Math.max(...ex,...pr,0.001), W=cv.width,H=cv.height,pad=8;
-  const X=h=>pad+h*(W-2*pad)/23, Y=v=>H-pad-(v/max)*(H-2*pad);
-  const line=(arr,color,fill)=>{ ctx.beginPath(); arr.forEach((v,h)=>h?ctx.lineTo(X(h),Y(v)):ctx.moveTo(X(h),Y(v)));
-    ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.stroke();
-    if(fill){ ctx.lineTo(X(23),Y(0)); ctx.lineTo(X(0),Y(0)); ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); } };
-  line(ex,"#8a97a3","rgba(138,151,163,.15)");
-  line(pr,"#1c7c4a","rgba(28,124,74,.15)");
-}
-
-/* ---- profile / building handlers ---- */
-function onProfileChange(first){
-  const p=currentProfile();
-  $("ie_toggle").checked=p.interactiveEffects.defaultOn;
-  $("modechip").textContent="MODE: "+p.mode.toUpperCase();
-  render();
-}
-function onBldgChange(){ /* building type informs new-line defaults only in prototype */ recalc(); }
-
-/* ---- save / load ---- */
-function snapshot(){
-  return { app:"lighting-calc", schemaVersion:1, saved:new Date().toISOString(),
-    projname:$("projname").value, profile:$("profile").value, bldg:$("bldg").value,
-    rate:+$("rate").value, ieOn:$("ie_toggle").checked, lines:LINES };
-}
-function restore(s){
-  $("projname").value=s.projname||""; $("profile").value=s.profile||Object.keys(PROFILES)[0];
-  $("bldg").value=s.bldg||"office"; $("rate").value=s.rate??0.10; $("ie_toggle").checked=!!s.ieOn;
-  LINES=(s.lines||[]).map(l=>({...l,id:nextId++}));
-  $("modechip").textContent="MODE: "+currentProfile().mode.toUpperCase();
-}
-function saveProject(){
-  const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download=($("projname").value||"project").replace(/\W+/g,"_")+".json"; a.click();
-}
-function loadProject(ev){
-  const f=ev.target.files[0]; if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{ try{ restore(JSON.parse(r.result)); render(); }catch(e){ alert("Could not read project file: "+e.message); } };
-  r.readAsText(f); ev.target.value="";
-}
-
-/* ---- QPL stub (scaffolded, not wired) ---- */
-async function qplLookup(dlcId){
-  // TODO: wire to DLC QPL API or bundled QPL snapshot when credentials/data provided.
-  // Expected return: { productId, wattage, lumens, dlcListed:true, category }
-  throw new Error("QPL lookup not configured");
-}
-
-function fmt(v,d){ return (v||0).toLocaleString("en-US",{maximumFractionDigits:d,minimumFractionDigits:0}); }
-function esc(s){ return (s||"").replace(/"/g,"&quot;"); }
-
-window.addEventListener("DOMContentLoaded", init);
