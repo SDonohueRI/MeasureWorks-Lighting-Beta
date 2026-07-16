@@ -18,6 +18,7 @@ function init(){
 
   let saved=null; try{ saved = localStorage.getItem("lightcalc_autosave"); }catch(e){}
   if(saved){ try{ restore(JSON.parse(saved)); } catch(e){ seed(); } } else seed();
+  seedSchedulesIfEmpty();
   onProfileChange(true);
 }
 
@@ -32,10 +33,13 @@ function seed(){
 function mkLine(p){
   const ex = findFixture("std_v1", p.exCode||""), pr = findFixture("std_v1", p.prCode||"");
   const st = p.spaceType || $("bldg").value || "office";
+  const qty = p.qty||1;
   return { id:nextId++, space:p.space||"", spaceType:st,
     exCode:p.exCode||"", exW:p.exW ?? (ex?ex.watts:0),
-    qty:p.qty||1, prCode:p.prCode||"", prW:p.prW ?? (pr?pr.watts:0),
-    control:p.control||"none", hou:p.hou ?? scheduleHOU(st), houProv:p.houProv||"default",
+    qty, prCode:p.prCode||"", prW:p.prW ?? (pr?pr.watts:0),
+    prQty: p.prQty ?? qty, prQtyProv: p.prQtyProv || "same",
+    control:p.control||"none", scheduleId:p.scheduleId||null,
+    hou:p.hou ?? scheduleHOU(st), houProv:p.houProv||"default",
     cost:p.cost||0 };
 }
 
@@ -56,9 +60,32 @@ function upd(id, field, val){
     if(l.houProv==="default") l.hou=scheduleHOU(val);
     render(); return;
   }
-  if(field==="hou"){ l.hou=+val||0; if(l.houProv==="default") l.houProv="override"; render(); return; }
-  if(["exW","prW","qty","cost"].includes(field)) l[field]=+val||0; else l[field]=val;
+  if(field==="scheduleId"){
+    l.scheduleId = val || null;
+    if(l.scheduleId){ l.hou=Math.round(lineImpliedHOU(l)); l.houProv="schedule"; }
+    else if(l.houProv==="schedule"){ l.hou=scheduleHOU(l.spaceType); l.houProv="default"; }
+    render(); return;
+  }
+  if(field==="qty"){
+    l.qty=+val||0;
+    if(l.prQtyProv==="same") l.prQty=l.qty;   // proposed tracks existing unless overridden
+    render(); return;
+  }
+  if(field==="prQty"){ l.prQty=+val||0; l.prQtyProv="override"; render(); return; }
+  if(field==="hou"){
+    if(l.houProv==="schedule") return;         // schedule-driven; edit the schedule instead
+    l.hou=+val||0; if(l.houProv==="default") l.houProv="override"; render(); return;
+  }
+  if(["exW","prW","cost"].includes(field)) l[field]=+val||0; else l[field]=val;
   recalc();
+}
+
+// Toggle proposed-qty provenance: SAME (tracks existing) ⇄ OVERRIDE (manual).
+function cyclePrQty(id){
+  const l=LINES.find(x=>x.id===id); if(!l) return;
+  if(l.prQtyProv==="override"){ l.prQtyProv="same"; l.prQty=l.qty; }
+  else { l.prQtyProv="override"; }
+  render();
 }
 
 function cycleProv(id){
@@ -84,8 +111,10 @@ function render(){
       <td><input type="number" value="${l.qty}" onchange="upd(${l.id},'qty',this.value)" style="width:56px"></td>
       <td><input list="fixlist" value="${esc(l.prCode)}" onchange="upd(${l.id},'prCode',this.value)" style="min-width:120px"></td>
       <td><input type="number" value="${l.prW}" onchange="upd(${l.id},'prW',this.value)" style="width:62px"></td>
+      <td style="white-space:nowrap"><input type="number" value="${proposedQty(l)}" onchange="upd(${l.id},'prQty',this.value)" style="width:52px" ${l.prQtyProv==="same"?'title="Same as existing (auto)"':''}> <span class="tag ${l.prQtyProv==="override"?"override":"default"}" title="${l.prQtyProv==="override"?"Manual override — click to reset to existing qty":"Same as existing — click to override"}" onclick="cyclePrQty(${l.id})">${l.prQtyProv==="override"?"OVR":"= EX"}</span></td>
       <td><select onchange="upd(${l.id},'control',this.value)">${CONTROL_OPTIONS.map(c=>`<option value="${c.id}" ${c.id===l.control?"selected":""}>${c.label}</option>`).join("")}</select></td>
-      <td style="white-space:nowrap"><input type="number" value="${l.hou}" onchange="upd(${l.id},'hou',this.value)" style="width:66px"> <span class="tag ${l.houProv}" title="Click to cycle provenance" onclick="cycleProv(${l.id})">${l.houProv.toUpperCase().slice(0,3)}</span></td>
+      <td><select onchange="upd(${l.id},'scheduleId',this.value)" style="min-width:120px" ${currentProfile().mode!=="8760"?"disabled title='8760 mode only'":""}>${scheduleOptionsHTML(l.scheduleId)}</select></td>
+      <td style="white-space:nowrap"><input type="number" value="${l.hou}" onchange="upd(${l.id},'hou',this.value)" style="width:66px" ${l.houProv==="schedule"?"disabled title='Set by assigned schedule'":""}> <span class="tag ${l.houProv==="schedule"?"metered":l.houProv}" title="${l.houProv==="schedule"?"Hours from assigned schedule":"Click to cycle provenance"}" ${l.houProv==="schedule"?"":`onclick="cycleProv(${l.id})"`}>${l.houProv==="schedule"?"SCH":l.houProv.toUpperCase().slice(0,3)}</span></td>
       <td><input type="number" value="${l.cost}" onchange="upd(${l.id},'cost',this.value)" style="width:78px"></td>
       <td class="rowsave">${fmt(lr?lr.kwh:0,0)}</td>
       <td><button class="rowbtn" title="Duplicate line" onclick="dupRow(${l.id})">⧉</button><button class="rowbtn" title="Delete line" onclick="delRow(${l.id})">✕</button></td>`;
@@ -145,6 +174,8 @@ function onProfileChange(first){
   const p=currentProfile();
   $("ie_toggle").checked=p.interactiveEffects.defaultOn;
   $("modechip").textContent="MODE: "+p.mode.toUpperCase();
+  updateScheduleVisibility();
+  renderScheduleBuilder();
   render();
 }
 function onBldgChange(){ /* building type informs new-line defaults only in prototype */ recalc(); }
@@ -153,11 +184,15 @@ function onBldgChange(){ /* building type informs new-line defaults only in prot
 function snapshot(){
   return { app:"lighting-calc", schemaVersion:1, saved:new Date().toISOString(),
     projname:$("projname").value, profile:$("profile").value, bldg:$("bldg").value,
-    rate:+$("rate").value, ieOn:$("ie_toggle").checked, lines:LINES };
+    rate:+$("rate").value, ieOn:$("ie_toggle").checked,
+    schedules:SCHEDULES_USER, lines:LINES };
 }
 function restore(s){
   $("projname").value=s.projname||""; $("profile").value=s.profile||Object.keys(PROFILES)[0];
   $("bldg").value=s.bldg||"office"; $("rate").value=s.rate??0.10; $("ie_toggle").checked=!!s.ieOn;
+  SCHEDULES_USER = Array.isArray(s.schedules) ? s.schedules : [];
+  // keep the id counter ahead of any restored schedule ids
+  SCHEDULES_USER.forEach(sc=>{ const n=parseInt(String(sc.id).replace(/\D/g,""),10); if(n>=SCHED_SEQ) SCHED_SEQ=n+1; });
   LINES=(s.lines||[]).map(l=>({...l,id:nextId++}));
   $("modechip").textContent="MODE: "+currentProfile().mode.toUpperCase();
 }
@@ -169,7 +204,7 @@ function saveProject(){
 function loadProject(ev){
   const f=ev.target.files[0]; if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{ try{ restore(JSON.parse(r.result)); render(); }catch(e){ alert("Could not read project file: "+e.message); } };
+  r.onload=()=>{ try{ restore(JSON.parse(r.result)); seedSchedulesIfEmpty(); updateScheduleVisibility(); renderScheduleBuilder(); render(); }catch(e){ alert("Could not read project file: "+e.message); } };
   r.readAsText(f); ev.target.value="";
 }
 

@@ -2,9 +2,16 @@
    mutated. Inputs in, results out, so the math is unit-testable and reusable
    across future calculators in the framework. */
 
-/* line: { space, spaceType, exCode, exW, qty, prCode, prW, control, hou, houProv, cost }
-   profile: see profiles.js. ieOn: boolean (user toggle).
+/* line: { space, spaceType, exCode, exW, qty, prCode, prW, prQty, prQtyProv,
+           control, hou, houProv, scheduleId, cost }
+   qty is the existing quantity; prQty is the proposed quantity (defaults to
+   qty unless overridden). profile: see profiles.js. ieOn: boolean (user toggle).
    Returns per-line and project results; in 8760 mode also hourly arrays. */
+
+// Proposed quantity for a line — defaults to existing qty unless overridden.
+function proposedQty(ln){
+  return (ln.prQtyProv === "override" && ln.prQty != null) ? ln.prQty : ln.qty;
+}
 
 /* Interactive effects factors for one line. If the profile's IE varies by
    space type, look the line's space type up in byType; otherwise (or if the
@@ -15,6 +22,23 @@ function ieFor(profile, spaceType, ieOn){
   if(ie.variesBySpaceType && ie.byType && ie.byType[spaceType])
     return { kwh: ie.byType[spaceType].kwh, kw: ie.byType[spaceType].kw };
   return { kwh: ie.kwhFactor, kw: ie.kwFactor };
+}
+
+/* Effective existing (pre-controls) hourly shape for a line, including the
+   HOU-override scaling k. Its annual sum equals the line's effective hours.
+   Shared with the Excel exporters so the workbook's 8760 traces to the same
+   numbers the engine produces. Only meaningful in 8760 mode. */
+function lineEffectiveShape(ln){
+  const base = lineBaseShape(ln);
+  let k = 1;
+  if(!(ln.scheduleId && userScheduleById(ln.scheduleId))){
+    const bH = scheduleHOU(ln.spaceType);
+    k = (ln.houProv !== "default" && ln.houProv !== "schedule" && bH > 0) ? ln.hou/bH : 1;
+  }
+  if(k === 1) return base;
+  const eff = new Float32Array(base.length);
+  for(let i=0;i<base.length;i++) eff[i] = base[i]*k;
+  return eff;
 }
 
 function calcProject(lines, profile, ieOn){
@@ -29,15 +53,23 @@ function calcProject(lines, profile, ieOn){
 
   for(const ln of lines){
     const ie = ieFor(profile, ln.spaceType, ieOn);
-    const exKW = (ln.exW * ln.qty)/1000, prKW = (ln.prW * ln.qty)/1000;
+    const exKW = (ln.exW * ln.qty)/1000, prKW = (ln.prW * proposedQty(ln))/1000;
     let lineKwh = 0, lineHouEff = ln.hou;
 
     if(profile.mode === "8760"){
-      const shapeEx = schedule8760(ln.spaceType);
-      const shapePr = applyControls(schedule8760(ln.spaceType), ln.control, profile);
-      // If user overrode HOU, scale the shape so its annual hours match the override.
-      const baseHOU = scheduleHOU(ln.spaceType);
-      const k = (ln.houProv !== "default" && baseHOU > 0) ? ln.hou/baseHOU : 1;
+      const base = lineBaseShape(ln);              // existing (pre-controls) shape
+      const shapeEx = base;
+      const shapePr = applyControls(base, ln.control, profile);
+      // Scale factor k reconciles the shape's annual hours to the line's HOU.
+      // Scheduled lines already carry the schedule's exact hours, so k = 1.
+      let baseHOU, k;
+      if(ln.scheduleId && userScheduleById(ln.scheduleId)){
+        baseHOU = 0; for(let i=0;i<8760;i++) baseHOU += base[i];
+        k = 1;
+      } else {
+        baseHOU = scheduleHOU(ln.spaceType);
+        k = (ln.houProv !== "default" && ln.houProv !== "schedule" && baseHOU > 0) ? ln.hou/baseHOU : 1;
+      }
       for(let i=0;i<8760;i++){
         res.hourlyEx[i] += exKW * shapeEx[i] * k;
         res.hourlyPr[i] += prKW * shapePr[i] * k;

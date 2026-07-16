@@ -36,19 +36,32 @@ function schedule8760(key){
 }
 
 /* Controls factors reshape a schedule rather than flat-scaling, where sensible:
-   occupancy: scale occupied hours by (1-sf); daylighting: reduce 9am–4pm hours. */
+   occupancy/NLC: scale all hours by (1-sf); daylighting: concentrate the
+   reduction into daytime hours (shifts *when* savings land, i.e. peak kW).
+
+   In every case the reshaped profile is normalized so its annual integral is
+   exactly (1-sf) of the original. This guarantees the 8760 energy result
+   reconciles with the simple annual math for identical inputs — the two modes
+   differ in demand shape, never in total kWh. */
 function applyControls(arr8760, control, profile){
   const sf = (profile.controlsFactors[control] || 0);
   if(!sf) return arr8760;
   const out = new Float32Array(8760);
-  for(let i=0;i<8760;i++){
-    const h = i % 24;
-    if(control === "daylight"){
-      out[i] = (h>=9 && h<16) ? arr8760[i]*(1-sf*2) : arr8760[i]; // concentrate in daylight hours, ~equivalent annual effect
+  if(control === "daylight"){
+    for(let i=0;i<8760;i++){
+      const h = i % 24;
+      out[i] = (h>=9 && h<16) ? arr8760[i]*(1-Math.min(1,sf*2)) : arr8760[i];
       if(out[i] < 0) out[i] = 0;
-    } else {
-      out[i] = arr8760[i]*(1-sf);
     }
+    // normalize to exact (1-sf) annual energy
+    let sin=0, sout=0;
+    for(let i=0;i<8760;i++){ sin+=arr8760[i]; sout+=out[i]; }
+    if(sout > 0){
+      const k = (1-sf)*sin/sout;
+      for(let i=0;i<8760;i++) out[i] *= k;
+    }
+    return out;
   }
+  for(let i=0;i<8760;i++) out[i] = arr8760[i]*(1-sf);
   return out;
 }
