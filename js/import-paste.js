@@ -9,9 +9,10 @@ const IMPORT_FIELDS = [
   { id:"spaceType", label:"Space type",       syn:["space type","spacetype","type","usage","schedule"] },
   { id:"exCode",    label:"Existing fixture", syn:["existing fixture","existing","ex fixture","baseline","existing code","fixture code existing","existing type"] },
   { id:"exW",       label:"Existing watts",   syn:["existing watts","ex w","ex watts","baseline watts","existing wattage","watts existing"] },
-  { id:"qty",       label:"Quantity",         syn:["qty","quantity","count","fixtures","# fixtures","number"] },
+  { id:"qty",       label:"Quantity",         syn:["qty","quantity","count","fixtures","# fixtures","number","existing qty","ex qty"] },
   { id:"prCode",    label:"Proposed fixture", syn:["proposed fixture","proposed","new fixture","retrofit","proposed code","led","proposed type"] },
   { id:"prW",       label:"Proposed watts",   syn:["proposed watts","pr w","new watts","proposed wattage","watts proposed","led watts"] },
+  { id:"prQty",     label:"Proposed qty",     syn:["proposed qty","pr qty","new qty","proposed quantity","proposed count"] },
   { id:"control",   label:"Controls",         syn:["controls","control","sensor","control type"] },
   { id:"hou",       label:"Annual hours",     syn:["hou","hours","annual hours","operating hours","hrs","run hours"] },
   { id:"cost",      label:"Cost $",           syn:["cost","installed cost","price","total cost","cost $","material + labor"] }
@@ -103,7 +104,8 @@ function commitImport(hasHeader){
       const st=matchSpaceType(raw.spaceType);
       if(st){ ln.spaceType=st; ln.hou=scheduleHOU(st); }
     }
-    if(raw.qty) ln.qty=parseFloat(raw.qty)||1;
+    if(raw.qty){ ln.qty=parseFloat(raw.qty)||1; if(ln.prQtyProv!=="override") ln.prQty=ln.qty; }
+    if(raw.prQty){ const q=parseFloat(raw.prQty); if(q>0 && Math.abs(q-ln.qty)>=0.0001){ ln.prQty=q; ln.prQtyProv="override"; } }
     if(raw.cost) ln.cost=parseFloat(String(raw.cost).replace(/[$,]/g,""))||0;
 
     // fixtures: try table match on text; explicit watt columns win

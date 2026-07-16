@@ -37,7 +37,9 @@ label.field{display:block;font-size:12px;color:#51606e}
 label.field b{display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:4px;color:#37424d}
 label.field input,label.field select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}
 .info{display:inline-flex;width:15px;height:15px;border-radius:50%;background:#e2e8ee;color:#51606e;font-size:10px;align-items:center;justify-content:center;cursor:help;font-weight:700;position:relative}
-.info:hover::after{content:attr(data-tip);position:absolute;left:18px;top:-4px;z-index:50;background:var(--ink);color:#fff;font-weight:400;padding:8px 10px;border-radius:5px;width:280px;font-size:11.5px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.info:hover::after{content:attr(data-tip);position:absolute;left:50%;transform:translateX(-50%);top:20px;z-index:60;background:var(--ink);color:#fff;font-weight:400;text-align:left;padding:8px 10px;border-radius:5px;width:260px;max-width:260px;white-space:normal;overflow-wrap:break-word;word-break:normal;font-size:11.5px;line-height:1.45;text-transform:none;letter-spacing:normal;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+/* keep the bubble on-screen for info icons near the right edge (last table columns) */
+table.lines th:nth-last-child(-n+3) .info:hover::after,td.rowsave~td .info:hover::after{left:auto;right:0;transform:none}
 table.lines{width:100%;border-collapse:collapse;font-size:12.5px}
 table.lines th{background:#f4f6f8;border-bottom:2px solid var(--line);padding:7px 6px;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:#51606e;white-space:nowrap}
 table.lines td{border-bottom:1px solid #e8ecf0;padding:4px 5px;vertical-align:middle}
@@ -82,6 +84,26 @@ input.missing{border-color:var(--flag);background:#fdf1ef}
 footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color:#8a97a3;font-family:var(--mono)}
 .modechip{font-family:var(--mono);font-size:11px;background:#123a49;color:#8fd4ea;border:1px solid #1c5568;padding:3px 9px;border-radius:12px}
 .toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#37424d;padding-top:18px}
+/* operating schedule builder */
+.sched-card{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px;background:#fafcfd}
+.sched-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.sched-name{flex:0 0 220px;font-weight:600;padding:5px 8px;border:1px solid var(--line);border-radius:4px}
+.sched-hou{font-family:var(--mono);font-size:11.5px;color:var(--accent-ink);background:#e6f1f5;border:1px solid #bcd9e4;border-radius:10px;padding:2px 9px}
+.sched-win{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:7px 0;border-top:1px dashed #e2e8ee}
+.sched-times{display:flex;gap:10px}
+.sched-times label{font-size:11px;color:#51606e;display:flex;align-items:center;gap:4px}
+.sched-times input{padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono)}
+.sched-days,.sched-months{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
+.daychip,.mochip{min-width:24px;height:24px;padding:0 5px;border:1px solid var(--line);background:#fff;color:#8a97a3;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--mono)}
+.daychip.on,.mochip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.daychip.hol{margin-left:4px;min-width:32px}
+.daychip.hol.on{background:var(--warn);border-color:var(--warn)}
+.mochip.all{margin-right:4px;min-width:30px;font-family:var(--sans)}
+.sched-months{margin-left:6px;padding-left:10px;border-left:1px solid var(--line)}
+.sched-add{margin-top:8px}
+.sched-add button,.sched-card .addrow button{background:#fff;border:1px dashed #9fb0bf;border-radius:4px;padding:5px 11px;cursor:pointer;color:#51606e;font-size:12px}
+.sched-add button:hover{border-color:var(--accent);color:var(--accent)}
+.winrm{margin-left:auto}
 </style>
 </head>
 <body>
@@ -116,25 +138,34 @@ footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color
     </div>
   </section>
 
+  <section class="panel" id="schedpanel">
+    <h2 style="cursor:pointer" onclick="toggleSchedCollapse()"><span id="schedcaret" style="display:inline-block;width:12px">▾</span> Operating schedules <span class="hint">8760 mode · define time-on/off windows by day &amp; month · assign to line items · click to collapse</span></h2>
+    <div class="body" id="schedbody"></div>
+  </section>
+
   <section class="panel">
     <h2>Line items <span class="hint">type a fixture code or description for autocomplete · watts fill from the profile wattage table</span></h2>
     <div class="body">
+      <div style="overflow-x:auto">
       <table class="lines">
         <thead><tr>
           <th style="width:24px"></th>
           <th>Space / location</th>
           <th>Space type <span class="info" data-tip="Sets the default operating schedule and HOU for this line from the profile's schedule library. Source citation appears in the Assumptions tab of the export.">i</span></th>
-          <th>Existing fixture</th><th>W</th>
-          <th>Qty</th>
-          <th>Proposed fixture</th><th>W</th>
+          <th>Existing fixture</th><th>Ex W</th>
+          <th>Qty <span class="info" data-tip="Existing fixture quantity for this line. Proposed quantity defaults to the same value unless overridden in the Pr Qty column.">i</span></th>
+          <th>Proposed fixture</th><th>Pr W</th>
+          <th>Pr Qty <span class="info" data-tip="Proposed fixture quantity. Defaults to the existing quantity (tag reads = EX); click the tag or edit the value to override for one-for-one exceptions (e.g. de-lamping or added fixtures).">i</span></th>
           <th>Controls <span class="info" data-tip="Proposed controls savings factor from the profile (occupancy, daylighting, networked). In 8760 mode the factor reshapes the hourly profile; in annual mode it reduces effective hours.">i</span></th>
-          <th>HOU <span class="info" data-tip="Annual operating hours. Defaults from profile by space type — click the tag to cycle provenance: DEFAULT → OVERRIDE → METERED. Overrides should carry justification for review.">i</span></th>
+          <th>Schedule <span class="info" data-tip="Operating schedule (8760 mode). Assign a named schedule defined above to drive this line's hourly shape and annual hours; leave as Space-type default to use the profile's library curve.">i</span></th>
+          <th>HOU <span class="info" data-tip="Annual operating hours. Defaults from profile by space type — click the tag to cycle provenance: DEFAULT → OVERRIDE → METERED. When a schedule is assigned the tag reads SCH and hours come from that schedule. Overrides should carry justification for review.">i</span></th>
           <th>Cost $ <span class="info" data-tip="Installed cost (material + labor) for this line. Used for incentive caps and simple payback.">i</span></th>
           <th>kWh saved</th>
           <th style="width:52px"></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
+      </div>
       <div class="addrow"><button onclick="addRow()">+ Add line item</button></div>
       <datalist id="fixlist"></datalist>
     </div>
@@ -182,6 +213,7 @@ footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color
 </main>
 <footer id="stamp"></footer>
 <script src="js/schedules.js"></script>
+<script src="js/schedule-builder.js"></script>
 <script src="js/profiles.js"></script>
 <script src="js/wattage-tables.js"></script>
 <script src="js/engine.js"></script>
