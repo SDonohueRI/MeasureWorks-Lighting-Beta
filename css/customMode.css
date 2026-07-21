@@ -1,0 +1,59 @@
+/* customMode.css — Custom Mode layout. Reuses the design tokens defined on
+   :root in index.html (--ink, --panel, --line, --accent, etc.). Desktop-first
+   engineering workspace: three regions (top bar, workspace, sidebar) plus a
+   separate full-results overlay. */
+
+/* header mode switch (Calculator <-> Custom) */
+.modeswitch{display:inline-flex;border:1px solid #46586a;border-radius:5px;overflow:hidden}
+.modeswitch button{background:#2c3d4d;color:#9fb0bf;border:none;padding:6px 14px;cursor:pointer;font-size:12.5px}
+.modeswitch button:hover{background:#3a4f63;color:#fff}
+.modeswitch button.on{background:var(--accent);color:#fff}
+
+/* ---- Custom Mode top project bar ---- */
+#customView{max-width:1500px;margin:0 auto;padding:16px 24px}
+.cm-topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:10px 14px;margin-bottom:16px;position:sticky;top:0;z-index:40}
+.cm-topbar-left{display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex:1}
+.cm-topbar-right{display:flex;align-items:center;gap:8px}
+.cm-inline{display:flex;align-items:center;gap:6px;font-size:12px;color:#51606e}
+.cm-inline span{font-weight:600;color:#37424d}
+.cm-inline input,.cm-inline select{padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.cm-inline input#cm_projname{min-width:200px;font-weight:600}
+.cm-calcmode{font-family:var(--mono);font-size:11px;background:#e6f1f5;color:var(--accent-ink);
+  border:1px solid #bcd9e4;border-radius:10px;padding:3px 9px}
+.cm-status{font-size:12px;color:var(--warn);font-family:var(--mono)}
+.cm-topbar-right button{background:#2c3d4d;color:#fff;border:1px solid #46586a;border-radius:4px;padding:7px 13px;cursor:pointer}
+.cm-topbar-right button:hover{background:#3a4f63}
+.cm-topbar-right button.primary{background:var(--accent);border-color:var(--accent)}
+.cm-topbar-right button.primary:hover{background:var(--accent-ink)}
+
+/* ---- workspace + sidebar grid ---- */
+.cm-main{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+@media(max-width:1000px){.cm-main{grid-template-columns:1fr}}
+.cm-sidebar .results{position:sticky;top:74px}
+.cm-placeholder,.cm-empty{color:#8a97a3;font-size:12.5px;padding:14px;font-style:italic}
+.cm-empty{padding:10px 2px}
+
+/* ---- zone manager ---- */
+.cm-zone{display:flex;align-items:center;gap:12px;padding:9px 10px;
+  border:1px solid var(--line);border-radius:5px;margin-bottom:8px;background:#fafcfd}
+.cm-zone-name{flex:0 0 200px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;
+  font-weight:600;background:#fff}
+.cm-zone-sum{flex:1;font-size:11.5px;color:#51606e;font-family:var(--mono)}
+.cm-zone-actions{display:flex;gap:2px;flex:0 0 auto}
+
+/* sidebar metadata line under the KPIs */
+.cm-meta{padding:0 14px 14px;font-size:11.5px;color:#51606e;font-family:var(--mono)}
+.cm-meta b{color:var(--ink)}
+
+/* ---- full results overlay ---- */
+.cm-fullresults{position:fixed;inset:0;background:rgba(20,30,40,.55);z-index:100;
+  align-items:flex-start;justify-content:center;overflow:auto;padding:30px 16px}
+.cm-fullresults-inner{background:#fff;border-radius:8px;max-width:1080px;width:100%;
+  padding:20px 24px 26px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.cm-fullresults-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cm-fullresults-head h2{font-size:15px}
+.cm-fullresults-head button{background:#e2e8ee;color:#51606e;border:1px solid var(--line);
+  border-radius:4px;padding:6px 14px;cursor:pointer}
+.cm-fullresults-head button:hover{background:#d5dbe2}

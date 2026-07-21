@@ -105,13 +105,18 @@ footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color
 .sched-add button:hover{border-color:var(--accent);color:var(--accent)}
 .winrm{margin-left:auto}
 </style>
+<link rel="stylesheet" href="css/customMode.css">
 </head>
 <body>
 <header>
   <div><h1>Lighting Savings Calculator</h1><div class="sub">framework prototype · custom measures · v0.1</div></div>
+  <div class="modeswitch">
+    <button id="mode-calc" class="on" onclick="setAppMode('calculator')">Calculator</button>
+    <button id="mode-custom" onclick="setAppMode('custom')">Custom Mode</button>
+  </div>
   <span class="modechip" id="modechip">MODE: 8760</span>
   <div class="spacer"></div>
-  <div class="toolbar">
+  <div class="toolbar" id="calcToolbar">
     <button onclick="openSettings()">Profile settings</button>
     <button onclick="saveProject()">Save project</button>
     <button onclick="document.getElementById('loadfile').click()">Open project</button>
@@ -123,7 +128,7 @@ footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color
     <button class="primary" onclick="document.getElementById('exportfmt').value==='single'?exportExcelSingle():exportExcel()">Export to Excel</button>
   </div>
 </header>
-<main>
+<main id="calcView">
 <div>
   <section class="panel">
     <h2>Project &amp; program</h2>
@@ -211,6 +216,67 @@ footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color
   </section>
 </aside>
 </main>
+
+<!-- ===== Custom Mode: single-screen engineering workspace ===== -->
+<div id="customView" style="display:none">
+  <div class="cm-topbar">
+    <div class="cm-topbar-left">
+      <label class="cm-inline"><span>Project</span>
+        <input id="cm_projname" value="Untitled Project" oninput="cmSetProjectField('name', this.value)"></label>
+      <label class="cm-inline"><span>Profile</span>
+        <select id="cm_profile" onchange="cmSetProjectField('profileId', this.value)"></select></label>
+      <span class="cm-calcmode" id="cm_calcmode">Calc: annual</span>
+    </div>
+    <div class="cm-topbar-right">
+      <span class="cm-status" id="cm_status">0 warnings</span>
+      <button onclick="openFullResults()">View full results</button>
+      <button class="primary" onclick="setAppMode('calculator')">Return to Calculator</button>
+    </div>
+  </div>
+
+  <div class="cm-main">
+    <div class="cm-workspace">
+      <section class="panel">
+        <h2>Project defaults <span class="hint">applied to new zones · overridable per zone</span></h2>
+        <div class="body cm-placeholder">Project-default editing (schedule, rate, interactive effects, rebate basis) is added in a later slice.</div>
+      </section>
+
+      <section class="panel">
+        <h2>Zones <span class="hint">add, duplicate, or remove modeled spaces</span></h2>
+        <div class="body">
+          <div id="cm_zonelist"></div>
+          <div class="addrow"><button onclick="cmAddZoneAndRender()">+ Add zone</button></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="cm-sidebar">
+      <section class="panel results">
+        <h2>Results <span class="hint">live</span></h2>
+        <div class="kpis">
+          <div class="kpi save"><div class="v" id="cm_k_kw">—</div><div class="l">kW saved</div></div>
+          <div class="kpi save"><div class="v" id="cm_k_kwh">—</div><div class="l">kWh / yr</div></div>
+          <div class="kpi money"><div class="v" id="cm_k_cost">—</div><div class="l">Cost savings / yr</div></div>
+          <div class="kpi money"><div class="v" id="cm_k_rebate">—</div><div class="l">Rebate</div></div>
+          <div class="kpi"><div class="v" id="cm_k_pb">—</div><div class="l">Payback, yrs</div></div>
+        </div>
+        <div class="cm-meta">Zones: <b id="cm_zonecount">0</b> &middot; Warnings: <b id="cm_warncount">0</b></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<!-- ===== Custom Mode: separate full-results view ===== -->
+<div id="cm_fullresults" class="cm-fullresults" style="display:none">
+  <div class="cm-fullresults-inner">
+    <div class="cm-fullresults-head">
+      <h2>Full results</h2>
+      <button onclick="closeFullResults()">Close</button>
+    </div>
+    <div class="cm-placeholder">Detailed project totals and zone-by-zone breakdowns are added with the results slice.</div>
+  </div>
+</div>
+
 <footer id="stamp"></footer>
 <script src="js/schedules.js"></script>
 <script src="js/schedule-builder.js"></script>
@@ -218,6 +284,8 @@ footer{padding:8px 24px 24px;max-width:1500px;margin:0 auto;font-size:11px;color
 <script src="js/wattage-tables.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/customModeState.js"></script>
+<script src="js/customModeUI.js"></script>
 <script src="js/import-paste.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/export-excel.js"></script>
