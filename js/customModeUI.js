@@ -125,6 +125,7 @@ function cmZoneCardHTML(z){
       <input class="cm-zone-name" value="${cmEsc(z.name)}" oninput="cmOnZoneName('${z.id}', this.value)" aria-label="Zone name">
       <span class="cm-zone-sum">${cmZoneSummary(z)}</span>
       <span class="cm-zone-kwh" id="cm-zkwh-${z.id}"></span>
+      <span class="cm-zone-warn" id="cm-zwarn-${z.id}"></span>
       <span class="cm-zone-actions">
         <button class="rowbtn" title="Duplicate zone" onclick="cmOnDuplicateZone('${z.id}')">&#10697;</button>
         <button class="rowbtn" title="Delete zone" onclick="cmOnDeleteZone('${z.id}')">&#10005;</button>
@@ -153,7 +154,8 @@ function cmControlsSummary(z){
 
 /* ---- zone editor ---- */
 function cmZoneEditorHTML(z){
-  return `<div class="cm-ed-pair">`
+  return `<div class="cm-zone-warns" id="cm-zwarns-${z.id}"></div>`
+       + `<div class="cm-ed-pair">`
          + cmSection("Identity", cmIdentityHTML(z))
          + cmSection("Scheduling", cmSchedulingHTML(z))
        + `</div>`
@@ -304,12 +306,16 @@ function renderCustomSidebar(){
   const zc = $("cm_zonecount");
   if(zc) zc.textContent = p.zones.length;
 
-  const warns = p.zones.reduce((n, z) => n + (z.warnings ? z.warnings.length : 0), 0)
-              + (p.warnings ? p.warnings.length : 0);
+  // Count "warn"-level review flags (info items are assumptions, not flags).
+  const countWarn = list => (list || []).reduce((n, w) => n + (w.level === "warn" ? 1 : 0), 0);
+  const warns = p.zones.reduce((n, z) => n + countWarn(z.warnings), 0) + countWarn(p.warnings);
   const wc = $("cm_warncount");
   if(wc) wc.textContent = warns;
   const status = $("cm_status");
-  if(status) status.textContent = warns + (warns === 1 ? " warning" : " warnings");
+  if(status){
+    status.textContent = warns + (warns === 1 ? " warning" : " warnings");
+    status.classList.toggle("clear", warns === 0);
+  }
 }
 
 /* ---- handlers: zone CRUD ---- */
@@ -365,15 +371,36 @@ function cmRefreshResults(){
   cmText("cm_k_rebate", t.hasRebate ? cmFmtMoney(t.rebate)      : "—");
   cmText("cm_k_pb",     cmFmtYrs(t.payback));
 
-  R.zones.forEach(zr => {
-    const badge = $("cm-zkwh-" + zr.id);
+  R.zones.forEach((zr, i) => {
+    const z = p.zones[i];
+    // store warnings on state so the sidebar count and full results can read them
+    z.warnings = (typeof cmZoneWarnings === "function") ? cmZoneWarnings(z, p, prof, zr.results) : [];
+
+    const badge = $("cm-zkwh-" + z.id);
     if(badge) badge.textContent = (zr.results.kwhSavings > 0 ? cmFmtNum(zr.results.kwhSavings, 0) + " kWh" : "");
-    const line = $("cm-zres-" + zr.id);
+    const line = $("cm-zres-" + z.id);
     if(line) line.innerHTML = cmZoneResultsHTML(zr.results);
+    const warnInd = $("cm-zwarn-" + z.id);
+    if(warnInd){
+      const n = z.warnings.filter(w => w.level === "warn").length;
+      warnInd.textContent = n ? "⚠ " + n : "";
+    }
+    const warnBlock = $("cm-zwarns-" + z.id);
+    if(warnBlock) warnBlock.innerHTML = cmWarnsHTML(z.warnings);
   });
+  p.warnings = (typeof cmProjectWarnings === "function") ? cmProjectWarnings(p, prof, t) : [];
+
+  renderCustomSidebar();  // refresh warning/zone counts now that warnings exist
 
   const fr = $("cm_fullresults");
   if(fr && fr.style.display !== "none") cmRenderFullResults(R);
+}
+
+function cmWarnsHTML(list){
+  if(!list || !list.length) return "";
+  return list.map(w =>
+    `<div class="cm-warn lvl-${w.level}">${w.level === "warn" ? "⚠" : "ℹ"} ${cmEsc(w.msg)}</div>`
+  ).join("");
 }
 
 function cmZoneResultsHTML(r){
@@ -460,7 +487,24 @@ function cmRenderFullResults(R){
 
   const meta = `<div class="cm-fr-meta">Profile: ${cmEsc(prof.label)} v${prof.version} · mode ${p.calcMode} · engine v0.1${p.defaults.interactiveEffectsEnabled ? " · interactive effects on" : ""}</div>`;
 
-  host.innerHTML = totals + table + meta;
+  // Warnings & assumptions, gathered per zone plus project-level.
+  const all = [];
+  R.zones.forEach((zr, i) => {
+    const z = p.zones[i];
+    const ws = (typeof cmZoneWarnings === "function") ? cmZoneWarnings(z, p, prof, zr.results) : [];
+    ws.forEach(w => all.push({ zone: z.name, level: w.level, msg: w.msg }));
+  });
+  ((typeof cmProjectWarnings === "function") ? cmProjectWarnings(p, prof, t) : [])
+    .forEach(w => all.push({ zone: null, level: w.level, msg: w.msg }));
+
+  const warns = `<div class="cm-fr-warns">
+      <h3>Warnings &amp; assumptions</h3>
+      ${all.length
+        ? all.map(w => `<div class="cm-warn lvl-${w.level}">${w.level === "warn" ? "⚠" : "ℹ"} ${w.zone ? `<b>${cmEsc(w.zone)}:</b> ` : ""}${cmEsc(w.msg)}</div>`).join("")
+        : `<div class="cm-warn lvl-info">ℹ No warnings — all inputs within expected ranges.</div>`}
+    </div>`;
+
+  host.innerHTML = totals + table + warns + meta;
 }
 
 /* ---- option/label + value utils ---- */

@@ -52,7 +52,17 @@
   font-weight:600;background:#fff}
 .cm-zone-sum{flex:1;font-size:11.5px;color:#51606e;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cm-zone-kwh{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--save);font-weight:600;white-space:nowrap}
+.cm-zone-warn{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--warn);font-weight:700;white-space:nowrap}
+.cm-zone-warn:empty{display:none}
 .cm-zone-actions{display:flex;gap:2px;flex:0 0 auto}
+
+/* ---- warnings (non-blocking) ---- */
+.cm-warn{display:block;font-size:11.5px;padding:4px 9px;border-radius:4px;margin-bottom:4px;border-left:3px solid;line-height:1.4}
+.cm-warn.lvl-warn{background:#fdf6ec;border-color:var(--warn);color:#7a4a00}
+.cm-warn.lvl-info{background:#eef4f8;border-color:var(--metered-tag);color:#2c5566}
+.cm-zone-warns{margin-bottom:2px}
+.cm-zone-warns:empty{display:none}
+.cm-status.clear{color:var(--save)}
 
 /* ---- zone editor (dense, spreadsheet-style) ----
    Cards flow left-to-right: Identity | Scheduling, then the three main cards
@@ -144,4 +154,6 @@ table.cm-fr th{background:#f4f6f8;border-bottom:2px solid var(--line);padding:6p
 table.cm-fr td{border-bottom:1px solid #eef1f4;padding:5px 8px;white-space:nowrap}
 table.cm-fr td.num,table.cm-fr th.num{text-align:right;font-family:var(--mono)}
 table.cm-fr tfoot .cm-fr-total td{border-top:2px solid var(--line);font-weight:700;background:#f8fafb}
-.cm-fr-meta{margin-top:12px;font-size:11px;color:#8a97a3;font-family:var(--mono)}
+.cm-fr-warns{margin-top:16px}
+.cm-fr-warns h3{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#51606e;margin-bottom:8px}
+.cm-fr-meta{margin-top:14px;font-size:11px;color:#8a97a3;font-family:var(--mono)}
