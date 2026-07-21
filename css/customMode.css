@@ -51,27 +51,26 @@
 .cm-zone-actions{display:flex;gap:2px;flex:0 0 auto}
 
 /* ---- zone editor (dense, spreadsheet-style) ----
-   Sections pack into two columns; tall table sections span the full width. */
+   Cards flow left-to-right: Identity | Scheduling, then the three main cards
+   Baseline | Proposed | Controls side by side, then Economics | Notes. Keeps
+   the editor short and scannable rather than one tall vertical stack. */
 .cm-zone-body{border-top:1px solid var(--line);padding:10px 12px;
-  display:grid;grid-template-columns:1fr 1fr;gap:7px 10px;align-items:start}
+  display:flex;flex-direction:column;gap:8px}
+.cm-ed-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+.cm-ed-triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:start}
 .cm-sub{border:1px solid #e8ecf0;border-radius:5px;overflow:hidden}
-.cm-sub.cm-span2{grid-column:1 / -1}
 .cm-sub-h{background:#f4f6f8;padding:4px 9px;font-size:10px;text-transform:uppercase;
   letter-spacing:.6px;color:#51606e;font-weight:600}
 .cm-sub-b{padding:8px 10px}
 
-/* half-width sections stack fields one per row; full-width sections go two-up */
-.cm-sub-b .grid2{display:grid;grid-template-columns:1fr;gap:6px 24px}
-.cm-sub.cm-span2 .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* fields stack one per row inside each card (cards are narrow columns now) */
+.cm-sub-b .grid2{display:grid;grid-template-columns:1fr;gap:6px}
 .cm-sub-b .cm-row{margin-top:6px}
 .cm-sub-b .cm-row:first-child{margin-top:0}
-.cm-zone-results{grid-column:1 / -1}
 
-/* one narrow workspace column: everything stacks single-column */
-@media(max-width:1100px){
-  .cm-zone-body{grid-template-columns:1fr}
-  .cm-sub.cm-span2 .grid2{grid-template-columns:1fr}
-}
+/* progressively collapse columns on narrower workspaces */
+@media(max-width:1200px){.cm-ed-triple{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){.cm-ed-triple,.cm-ed-pair{grid-template-columns:1fr}}
 
 /* inline field: label left (fixed), input right (wide) */
 .cm-sub-b .field{display:flex;align-items:center;gap:9px;margin:0}

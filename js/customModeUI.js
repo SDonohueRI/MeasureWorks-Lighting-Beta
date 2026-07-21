@@ -150,19 +150,24 @@ function cmControlsSummary(z){
 
 /* ---- zone editor ---- */
 function cmZoneEditorHTML(z){
-  // span=true → full-width section (tall / table-bearing); others pack two-up.
-  return cmSection("Identity", cmIdentityHTML(z))
-       + cmSection("Scheduling", cmSchedulingHTML(z))
-       + cmSection("Baseline", cmBaselineHTML(z), true)
-       + cmSection("Proposed", cmProposedHTML(z), true)
-       + cmSection("Controls", cmControlsHTML(z), true)
-       + cmSection("Economics / overrides", cmEconomicsHTML(z))
-       + cmSection("Notes", cmNotesHTML(z))
+  return `<div class="cm-ed-pair">`
+         + cmSection("Identity", cmIdentityHTML(z))
+         + cmSection("Scheduling", cmSchedulingHTML(z))
+       + `</div>`
+       + `<div class="cm-ed-triple">`
+         + cmSection("Baseline", cmBaselineHTML(z))
+         + cmSection("Proposed", cmProposedHTML(z))
+         + cmSection("Controls", cmControlsHTML(z))
+       + `</div>`
+       + `<div class="cm-ed-pair">`
+         + cmSection("Economics / overrides", cmEconomicsHTML(z))
+         + cmSection("Notes", cmNotesHTML(z))
+       + `</div>`
        + `<div class="cm-zone-results">Zone results calculate once the engine slice lands.</div>`;
 }
 
-function cmSection(title, body, span){
-  return `<div class="cm-sub${span ? " cm-span2" : ""}"><div class="cm-sub-h">${title}</div><div class="cm-sub-b">${body}</div></div>`;
+function cmSection(title, body){
+  return `<div class="cm-sub"><div class="cm-sub-h">${title}</div><div class="cm-sub-b">${body}</div></div>`;
 }
 
 function cmIdentityHTML(z){
