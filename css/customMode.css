@@ -35,13 +35,50 @@
 .cm-placeholder,.cm-empty{color:#8a97a3;font-size:12.5px;padding:14px;font-style:italic}
 .cm-empty{padding:10px 2px}
 
+/* ---- project defaults ---- */
+.cm-notes{display:block;margin-top:12px}
+.cm-notes textarea,.cm-notes input{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#fff;font:inherit}
+
 /* ---- zone manager ---- */
-.cm-zone{display:flex;align-items:center;gap:12px;padding:9px 10px;
-  border:1px solid var(--line);border-radius:5px;margin-bottom:8px;background:#fafcfd}
+.cm-zone{border:1px solid var(--line);border-radius:5px;margin-bottom:8px;background:#fafcfd}
+.cm-zone.open{background:#fff;box-shadow:0 1px 4px rgba(20,30,40,.06)}
+.cm-zone-head{display:flex;align-items:center;gap:10px;padding:9px 10px}
+.cm-caret{border:none;background:none;cursor:pointer;color:#51606e;font-size:13px;padding:2px 4px;flex:0 0 auto}
+.cm-caret:hover{color:var(--ink)}
 .cm-zone-name{flex:0 0 200px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;
   font-weight:600;background:#fff}
-.cm-zone-sum{flex:1;font-size:11.5px;color:#51606e;font-family:var(--mono)}
+.cm-zone-sum{flex:1;font-size:11.5px;color:#51606e;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cm-zone-actions{display:flex;gap:2px;flex:0 0 auto}
+
+/* ---- zone editor ---- */
+.cm-zone-body{border-top:1px solid var(--line);padding:12px 14px}
+.cm-sub{border:1px solid #e8ecf0;border-radius:5px;margin-bottom:10px;overflow:hidden}
+.cm-sub-h{background:#f4f6f8;padding:6px 10px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.7px;color:#51606e;font-weight:600}
+.cm-sub-b{padding:10px}
+.cm-sub-b .field{margin-bottom:0}
+.cm-sub-b .field input,.cm-sub-b .field select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.cm-inline-note{font-size:11.5px;color:#8a97a3;margin-top:6px;font-style:italic}
+.cm-inline-note.warn{color:var(--warn);font-style:normal}
+.cm-shortcut{margin-top:10px}
+.cm-shortcut button{background:#fff;border:1px dashed #9fb0bf;border-radius:4px;padding:5px 11px;
+  cursor:pointer;color:#51606e;font-size:12px}
+.cm-shortcut button:hover{border-color:var(--accent);color:var(--accent)}
+.cm-zone-results{font-size:11.5px;color:#8a97a3;font-style:italic;padding:4px 2px}
+
+/* controls rows */
+.cm-ctrl{display:flex;align-items:center;gap:16px;padding:5px 0;border-bottom:1px dashed #eef1f4;flex-wrap:wrap}
+.cm-ctrl:last-of-type{border-bottom:none}
+.cm-ctrl-en{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#37424d;flex:0 0 170px}
+.cm-ctrl-val{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#51606e}
+.cm-ctrl-val input{width:90px;padding:5px 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono)}
+
+/* fixture rows table */
+table.cm-fx{width:100%;border-collapse:collapse;font-size:12px}
+table.cm-fx th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+  color:#8a97a3;padding:3px 5px;border-bottom:1px solid var(--line)}
+table.cm-fx td{padding:3px 5px;border-bottom:1px solid #eef1f4}
+table.cm-fx input{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono)}
 
 /* sidebar metadata line under the KPIs */
 .cm-meta{padding:0 14px 14px;font-size:11.5px;color:#51606e;font-family:var(--mono)}
