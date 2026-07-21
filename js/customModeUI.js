@@ -150,18 +150,19 @@ function cmControlsSummary(z){
 
 /* ---- zone editor ---- */
 function cmZoneEditorHTML(z){
+  // span=true → full-width section (tall / table-bearing); others pack two-up.
   return cmSection("Identity", cmIdentityHTML(z))
-       + cmSection("Baseline", cmBaselineHTML(z))
-       + cmSection("Proposed", cmProposedHTML(z))
-       + cmSection("Controls", cmControlsHTML(z))
        + cmSection("Scheduling", cmSchedulingHTML(z))
+       + cmSection("Baseline", cmBaselineHTML(z), true)
+       + cmSection("Proposed", cmProposedHTML(z), true)
+       + cmSection("Controls", cmControlsHTML(z), true)
        + cmSection("Economics / overrides", cmEconomicsHTML(z))
        + cmSection("Notes", cmNotesHTML(z))
        + `<div class="cm-zone-results">Zone results calculate once the engine slice lands.</div>`;
 }
 
-function cmSection(title, body){
-  return `<div class="cm-sub"><div class="cm-sub-h">${title}</div><div class="cm-sub-b">${body}</div></div>`;
+function cmSection(title, body, span){
+  return `<div class="cm-sub${span ? " cm-span2" : ""}"><div class="cm-sub-h">${title}</div><div class="cm-sub-b">${body}</div></div>`;
 }
 
 function cmIdentityHTML(z){
@@ -195,8 +196,8 @@ function cmProposedHTML(z){
            onchange="cmZR('${z.id}', 'proposed.sameAsBaseline', this.checked)">
       <label for="cm_sab_${z.id}">Same as baseline (controls-only)</label></div>
     ${same ? `<div class="cm-inline-note">Proposed connected load mirrors baseline; apply controls below.</div>`
-      : `<label class="field" style="margin-top:8px;display:block"><b>Proposed method</b>
-           <select onchange="cmZR('${z.id}', 'proposed.method', this.value)" style="max-width:260px">${cmOptions(CM_METHODS, z.proposed.method)}</select></label>
+      : `<div class="cm-row"><label class="field"><b>Proposed method</b>
+           <select onchange="cmZR('${z.id}', 'proposed.method', this.value)">${cmOptions(CM_METHODS, z.proposed.method)}</select></label></div>
          ${cmMethodFieldsHTML(z, "proposed")}
          <label class="field cm-notes"><b>Reference / citation</b>
            <input value="${cmEsc(z.proposed.referenceNote)}" oninput="cmZ('${z.id}', 'proposed.referenceNote', this.value)"></label>`}`;
@@ -206,14 +207,14 @@ function cmProposedHTML(z){
 function cmMethodFieldsHTML(z, which){
   const b = z[which];
   if(b.method === "connectedLoad"){
-    return `<div class="grid2"><label class="field"><b>Connected load (kW)</b>
+    return `<div class="cm-row"><label class="field"><b>Connected load (kW)</b>
       <input type="number" step="0.01" value="${cmVal(b.connectedLoadKw)}"
              oninput="cmZ('${z.id}', '${which}.connectedLoadKw', cmNum(this.value))"></label></div>`;
   }
   if(b.method === "lpd"){
     const areaWarn = (z.floorArea == null || z.floorArea === "")
       ? `<div class="cm-inline-note warn">Set floor area (Identity) to derive connected load from LPD.</div>` : ``;
-    return `<div class="grid2"><label class="field"><b>LPD (W/ft&sup2;)</b>
+    return `<div class="cm-row"><label class="field"><b>LPD (W/ft&sup2;)</b>
       <input type="number" step="0.01" value="${cmVal(b.lpd)}"
              oninput="cmZ('${z.id}', '${which}.lpd', cmNum(this.value))"></label></div>${areaWarn}`;
   }
@@ -268,8 +269,8 @@ function cmSchedulingHTML(z){
       <label for="cm_si_${z.id}">Inherit project default schedule</label></div>
     ${inherited
       ? `<div class="cm-inline-note">Using project default: <b>${defLabel}</b></div>`
-      : `<label class="field" style="margin-top:8px;display:block;max-width:260px"><b>Zone schedule</b>
-           <select onchange="cmZ('${z.id}', 'scheduleId', this.value || null)">${cmScheduleOptions(z.scheduleId)}</select></label>`}`;
+      : `<div class="cm-row"><label class="field"><b>Zone schedule</b>
+           <select onchange="cmZ('${z.id}', 'scheduleId', this.value || null)">${cmScheduleOptions(z.scheduleId)}</select></label></div>`}`;
 }
 
 function cmEconomicsHTML(z){
