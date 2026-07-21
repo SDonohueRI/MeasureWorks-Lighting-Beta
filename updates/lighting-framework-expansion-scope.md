@@ -70,7 +70,7 @@ Goals:
 
 The user should be able to start in the existing calculator and explicitly switch to the new framework mode using a visible UI control such as:
 
-- `Switch to Advanced Project Mode`
+- `Switch to Custom Lighting Project`
 - `Open Advanced Project Workflow`
 
 This preserves continuity while introducing the expanded framework on the user's terms.
