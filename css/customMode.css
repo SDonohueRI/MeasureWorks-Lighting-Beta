@@ -10,7 +10,10 @@
 .modeswitch button.on{background:var(--accent);color:#fff}
 
 /* ---- Custom Mode top project bar ---- */
-#customView{max-width:1500px;margin:0 auto;padding:16px 24px}
+/* Wider workspace than the calculator's nominal 1500 cap: Custom Mode is a
+   dense engineering surface and benefits from the extra horizontal room on
+   large displays. Trimmed side padding + slimmer sidebar reclaim more width. */
+#customView{max-width:1800px;margin:0 auto;padding:16px 16px}
 .cm-topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   background:var(--panel);border:1px solid var(--line);border-radius:6px;
   padding:10px 14px;margin-bottom:16px;position:sticky;top:0;z-index:40}
@@ -29,7 +32,7 @@
 .cm-topbar-right button.primary:hover{background:var(--accent-ink)}
 
 /* ---- workspace + sidebar grid ---- */
-.cm-main{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+.cm-main{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start}
 @media(max-width:1000px){.cm-main{grid-template-columns:1fr}}
 .cm-sidebar .results{position:sticky;top:74px}
 .cm-placeholder,.cm-empty{color:#8a97a3;font-size:12.5px;padding:14px;font-style:italic}
