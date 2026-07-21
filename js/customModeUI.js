@@ -72,6 +72,7 @@ function renderCustomMode(){
   renderProjectDefaults();
   renderCustomZones();
   renderCustomSidebar();
+  cmRefreshResults();
 }
 
 /* ---- project defaults panel ---- */
@@ -102,6 +103,7 @@ function renderProjectDefaults(){
 function cmOnDefault(field, val){
   cmSetProjectDefault(field, val);
   if(field === "scheduleId") renderCustomZones();  // refresh zones that inherit
+  cmRefreshResults();                               // rate/schedule/IE affect results
 }
 function cmOnProjectNotes(val){ cmSetProjectFieldState("notes", val); }
 
@@ -122,6 +124,7 @@ function cmZoneCardHTML(z){
       <button class="cm-caret" onclick="cmToggleZone('${z.id}')" title="${open ? "Collapse" : "Expand"}">${open ? "▾" : "▸"}</button>
       <input class="cm-zone-name" value="${cmEsc(z.name)}" oninput="cmOnZoneName('${z.id}', this.value)" aria-label="Zone name">
       <span class="cm-zone-sum">${cmZoneSummary(z)}</span>
+      <span class="cm-zone-kwh" id="cm-zkwh-${z.id}"></span>
       <span class="cm-zone-actions">
         <button class="rowbtn" title="Duplicate zone" onclick="cmOnDuplicateZone('${z.id}')">&#10697;</button>
         <button class="rowbtn" title="Delete zone" onclick="cmOnDeleteZone('${z.id}')">&#10005;</button>
@@ -163,7 +166,7 @@ function cmZoneEditorHTML(z){
          + cmSection("Economics / overrides", cmEconomicsHTML(z))
          + cmSection("Notes", cmNotesHTML(z))
        + `</div>`
-       + `<div class="cm-zone-results">Zone results calculate once the engine slice lands.</div>`;
+       + `<div class="cm-zone-results" id="cm-zres-${z.id}"></div>`;
 }
 
 function cmSection(title, body){
@@ -313,35 +316,152 @@ function renderCustomSidebar(){
 function cmAddZoneAndRender(){ const z = cmAddZone(); CM_EXPANDED.add(z.id); renderCustomMode(); }
 function cmOnDuplicateZone(id){ const c = cmDuplicateZone(id); if(c) CM_EXPANDED.add(c.id); renderCustomMode(); }
 function cmOnDeleteZone(id){ CM_EXPANDED.delete(id); cmDeleteZone(id); renderCustomMode(); }
-function cmToggleZone(id){ if(CM_EXPANDED.has(id)) CM_EXPANDED.delete(id); else CM_EXPANDED.add(id); renderCustomZones(); }
+function cmToggleZone(id){ if(CM_EXPANDED.has(id)) CM_EXPANDED.delete(id); else CM_EXPANDED.add(id); renderCustomZones(); cmRefreshResults(); }
 
 // Name edits update state without rebuilding the list, to preserve input focus.
 function cmOnZoneName(id, val){ cmSetZoneFieldState(id, "name", val); }
 
 /* ---- handlers: zone fields ----
-   cmZ  = non-structural edit (text/number): update state only, keep focus.
-   cmZR = structural edit (select/checkbox that reveals or hides fields, or
-          changes the collapsed summary): update state and re-render zones. */
-function cmZ(id, path, val){ cmSetZoneNested(id, path, val); }
-function cmZR(id, path, val){ cmSetZoneNested(id, path, val); renderCustomZones(); }
+   cmZ  = non-structural edit (text/number): update state + recompute results,
+          without rebuilding inputs (keeps focus while typing).
+   cmZR = structural edit (select/checkbox that reveals/hides fields or changes
+          the collapsed summary): update state, re-render zones, recompute. */
+function cmZ(id, path, val){ cmSetZoneNested(id, path, val); cmRefreshResults(); }
+function cmZR(id, path, val){ cmSetZoneNested(id, path, val); renderCustomZones(); cmRefreshResults(); }
 
-function cmCopyBaseline(id){ cmCopyBaselineToProposed(id); renderCustomZones(); }
+function cmCopyBaseline(id){ cmCopyBaselineToProposed(id); renderCustomZones(); cmRefreshResults(); }
 
 /* ---- handlers: fixture rows ---- */
-function cmFxAdd(id, which){ cmAddFixtureRow(id, which); renderCustomZones(); }
-function cmFxDel(id, which, rowId){ cmDeleteFixtureRow(id, which, rowId); renderCustomZones(); }
-function cmFxSet(id, which, rowId, field, val){ cmSetFixtureRow(id, which, rowId, field, val); }
+function cmFxAdd(id, which){ cmAddFixtureRow(id, which); renderCustomZones(); cmRefreshResults(); }
+function cmFxDel(id, which, rowId){ cmDeleteFixtureRow(id, which, rowId); renderCustomZones(); cmRefreshResults(); }
+function cmFxSet(id, which, rowId, field, val){ cmSetFixtureRow(id, which, rowId, field, val); cmRefreshResults(); }
 
 /* ---- top-bar handlers ---- */
 function cmSetProjectField(field, val){
   cmSetProjectFieldState(field, val);
-  if(field === "profileId"){ /* reserved: reflect profile-driven calc mode later */ }
+  if(field === "profileId"){ /* profile change re-bases every zone's math */ }
   renderCustomSidebar();
+  cmRefreshResults();
+}
+
+/* ---- results: live sidebar, inline zone lines, full-results view ---- */
+function cmProfile(){
+  const p = cmEnsureProject();
+  return (typeof PROFILES === "object" && PROFILES[p.profileId]) ? PROFILES[p.profileId] : null;
+}
+
+// Recompute and paint results. Updates text/HTML only (never input values), so
+// it is safe to call on every keystroke without disturbing focus.
+function cmRefreshResults(){
+  const p = cmEnsureProject();
+  const prof = cmProfile();
+  if(!prof || typeof cmCalcProject !== "function") return;
+  const R = cmCalcProject(p, prof);
+  const t = R.totals;
+
+  cmText("cm_k_kw",     cmFmtNum(t.kwSavings, 1));
+  cmText("cm_k_kwh",    cmFmtNum(t.kwhSavings, 0));
+  cmText("cm_k_cost",   t.hasCost   ? cmFmtMoney(t.costSavings) : "—");
+  cmText("cm_k_rebate", t.hasRebate ? cmFmtMoney(t.rebate)      : "—");
+  cmText("cm_k_pb",     cmFmtYrs(t.payback));
+
+  R.zones.forEach(zr => {
+    const badge = $("cm-zkwh-" + zr.id);
+    if(badge) badge.textContent = (zr.results.kwhSavings > 0 ? cmFmtNum(zr.results.kwhSavings, 0) + " kWh" : "");
+    const line = $("cm-zres-" + zr.id);
+    if(line) line.innerHTML = cmZoneResultsHTML(zr.results);
+  });
+
+  const fr = $("cm_fullresults");
+  if(fr && fr.style.display !== "none") cmRenderFullResults(R);
+}
+
+function cmZoneResultsHTML(r){
+  const parts = [
+    `Baseline <b>${cmFmtNum(r.baselineKw, 2)}</b> kW`,
+    `Proposed <b>${cmFmtNum(r.proposedKw, 2)}</b> kW`,
+    `Save <b>${cmFmtNum(r.kwSavings, 2)}</b> kW`,
+    `<b>${cmFmtNum(r.kwhSavings, 0)}</b> kWh/yr`
+  ];
+  if(r.costSavings != null) parts.push(`<b>${cmFmtMoney(r.costSavings)}</b>/yr`);
+  if(r.rebate != null)      parts.push(`rebate <b>${cmFmtMoney(r.rebate)}</b>`);
+  if(r.payback != null)     parts.push(`payback <b>${cmFmtYrs(r.payback)}</b> yr`);
+  return parts.join(" &nbsp;·&nbsp; ");
 }
 
 /* ---- full results view ---- */
-function openFullResults(){ const el = $("cm_fullresults"); if(el) el.style.display = "flex"; }
+function openFullResults(){
+  cmRenderFullResults();
+  const el = $("cm_fullresults");
+  if(el) el.style.display = "flex";
+}
 function closeFullResults(){ const el = $("cm_fullresults"); if(el) el.style.display = "none"; }
+
+function cmRenderFullResults(R){
+  const host = $("cm_fullresults_body");
+  if(!host) return;
+  const p = cmEnsureProject();
+  const prof = cmProfile();
+  if(!R) R = prof ? cmCalcProject(p, prof) : null;
+  if(!R){ host.innerHTML = `<div class="cm-placeholder">Select a program profile to compute results.</div>`; return; }
+  const t = R.totals;
+
+  const tile = (label, val) => `<div class="cm-fr-tile"><div class="v">${val}</div><div class="l">${label}</div></div>`;
+  const totals = `<div class="cm-fr-tiles">
+      ${tile("kW saved", cmFmtNum(t.kwSavings, 1))}
+      ${tile("kWh / yr", cmFmtNum(t.kwhSavings, 0))}
+      ${tile("Cost savings / yr", t.hasCost ? cmFmtMoney(t.costSavings) : "—")}
+      ${tile("Rebate", t.hasRebate ? cmFmtMoney(t.rebate) : "—")}
+      ${tile("Payback, yrs", cmFmtYrs(t.payback))}
+      ${tile("Zones", R.zones.length)}
+    </div>`;
+
+  const rows = R.zones.map((zr, i) => {
+    const r = zr.results, z = p.zones[i];
+    return `<tr>
+      <td>${cmEsc(z.name)}</td>
+      <td>${cmSourceLabel(z.baseline.source)} · ${cmMethodLabel(z.baseline.method)} → ${z.proposed.sameAsBaseline ? "same" : cmMethodLabel(z.proposed.method)}</td>
+      <td>${cmControlsSummary(z) || "—"}</td>
+      <td class="num">${cmFmtNum(r.baselineKw, 2)}</td>
+      <td class="num">${cmFmtNum(r.proposedKw, 2)}</td>
+      <td class="num">${cmFmtNum(r.kwSavings, 2)}</td>
+      <td class="num">${cmFmtNum(r.baselineKwh, 0)}</td>
+      <td class="num">${cmFmtNum(r.proposedKwh, 0)}</td>
+      <td class="num">${cmFmtNum(r.kwhSavings, 0)}</td>
+      <td class="num">${r.costSavings != null ? cmFmtMoney(r.costSavings) : "—"}</td>
+      <td class="num">${r.rebate != null ? cmFmtMoney(r.rebate) : "—"}</td>
+      <td class="num">${cmFmtYrs(r.payback)}</td>
+    </tr>`;
+  }).join("");
+
+  const foot = `<tr class="cm-fr-total">
+      <td>Project total</td><td></td><td></td>
+      <td class="num">${cmFmtNum(t.baselineKw, 2)}</td>
+      <td class="num">${cmFmtNum(t.proposedKw, 2)}</td>
+      <td class="num">${cmFmtNum(t.kwSavings, 2)}</td>
+      <td class="num">${cmFmtNum(t.baselineKwh, 0)}</td>
+      <td class="num">${cmFmtNum(t.proposedKwh, 0)}</td>
+      <td class="num">${cmFmtNum(t.kwhSavings, 0)}</td>
+      <td class="num">${t.hasCost ? cmFmtMoney(t.costSavings) : "—"}</td>
+      <td class="num">${t.hasRebate ? cmFmtMoney(t.rebate) : "—"}</td>
+      <td class="num">${cmFmtYrs(t.payback)}</td>
+    </tr>`;
+
+  const table = `<table class="cm-fr">
+      <thead><tr>
+        <th>Zone</th><th>Baseline → Proposed</th><th>Controls</th>
+        <th class="num">Base kW</th><th class="num">Prop kW</th><th class="num">kW saved</th>
+        <th class="num">Base kWh</th><th class="num">Prop kWh</th><th class="num">kWh saved</th>
+        <th class="num">Cost/yr</th><th class="num">Rebate</th><th class="num">Payback</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot>${foot}</tfoot>
+    </table>`;
+
+  const meta = `<div class="cm-fr-meta">Profile: ${cmEsc(prof.label)} v${prof.version} · mode ${p.calcMode} · engine v0.1${p.defaults.interactiveEffectsEnabled ? " · interactive effects on" : ""}</div>`;
+
+  host.innerHTML = totals + table + meta;
+}
 
 /* ---- option/label + value utils ---- */
 function cmOptions(list, sel){
@@ -366,3 +486,14 @@ function cmSourceLabel(id){ const s = CM_SOURCES.find(x => x.id === id); return 
 function cmVal(v){ return (v == null) ? "" : v; }
 function cmNum(v){ return (v === "" || v == null) ? null : (+v); }
 function cmEsc(s){ return (s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+// Set an element's text by id, if present.
+function cmText(id, txt){ const e = $(id); if(e) e.textContent = txt; }
+
+// Result formatters: em dash for null/non-finite so blanks read as "no basis".
+function cmFmtNum(v, dec){
+  return (v == null || !isFinite(v)) ? "—"
+       : Number(v).toLocaleString("en-US", { maximumFractionDigits: dec, minimumFractionDigits: 0 });
+}
+function cmFmtMoney(v){ return (v == null || !isFinite(v)) ? "—" : "$" + cmFmtNum(v, 0); }
+function cmFmtYrs(v){ return (v == null || !isFinite(v)) ? "—" : Number(v).toFixed(1); }

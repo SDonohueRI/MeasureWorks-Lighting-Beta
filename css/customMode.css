@@ -51,6 +51,7 @@
 .cm-zone-name{flex:0 0 200px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;
   font-weight:600;background:#fff}
 .cm-zone-sum{flex:1;font-size:11.5px;color:#51606e;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-zone-kwh{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--save);font-weight:600;white-space:nowrap}
 .cm-zone-actions{display:flex;gap:2px;flex:0 0 auto}
 
 /* ---- zone editor (dense, spreadsheet-style) ----
@@ -97,7 +98,9 @@
 .cm-shortcut button{background:#fff;border:1px dashed #9fb0bf;border-radius:4px;padding:4px 10px;
   cursor:pointer;color:#51606e;font-size:11.5px}
 .cm-shortcut button:hover{border-color:var(--accent);color:var(--accent)}
-.cm-zone-results{font-size:11px;color:#8a97a3;font-style:italic;padding:3px 2px}
+.cm-zone-results{font-size:11.5px;color:#37424d;font-family:var(--mono);padding:4px 2px}
+.cm-zone-results b{color:var(--accent-ink);font-weight:700}
+.cm-zone-results:empty{display:none}
 
 /* controls: enable label + inline value on one tight row */
 .cm-ctrl{display:flex;align-items:center;gap:14px;padding:4px 0;border-bottom:1px dashed #eef1f4;flex-wrap:wrap}
@@ -127,3 +130,18 @@ table.cm-fx input{width:100%;padding:5px 6px;border:1px solid var(--line);border
 .cm-fullresults-head button{background:#e2e8ee;color:#51606e;border:1px solid var(--line);
   border-radius:4px;padding:6px 14px;cursor:pointer}
 .cm-fullresults-head button:hover{background:#d5dbe2}
+
+/* full-results summary tiles */
+.cm-fr-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.cm-fr-tile{border:1px solid var(--line);border-radius:5px;padding:10px 12px}
+.cm-fr-tile .v{font-family:var(--mono);font-size:19px;font-weight:600;color:var(--accent-ink)}
+.cm-fr-tile .l{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#8a97a3;margin-top:3px}
+
+/* full-results zone table */
+table.cm-fr{width:100%;border-collapse:collapse;font-size:12px;display:block;overflow-x:auto}
+table.cm-fr th{background:#f4f6f8;border-bottom:2px solid var(--line);padding:6px 8px;text-align:left;
+  font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#51606e;white-space:nowrap}
+table.cm-fr td{border-bottom:1px solid #eef1f4;padding:5px 8px;white-space:nowrap}
+table.cm-fr td.num,table.cm-fr th.num{text-align:right;font-family:var(--mono)}
+table.cm-fr tfoot .cm-fr-total td{border-top:2px solid var(--line);font-weight:700;background:#f8fafb}
+.cm-fr-meta{margin-top:12px;font-size:11px;color:#8a97a3;font-family:var(--mono)}
