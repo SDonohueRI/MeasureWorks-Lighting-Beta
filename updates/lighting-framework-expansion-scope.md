@@ -55,15 +55,16 @@ Goals:
 - maintain quick-entry support for straightforward lighting replacement scenarios
 - maintain result continuity during framework transition
 
-### 3.2 Advanced Project Mode
+### 3.2 Custom Mode
 
-A new framework-based mode should be added to support more flexible, project-oriented modeling.
+A new framework-based custom mode should be added to support more flexible, project-oriented modeling without splitting users across multiple advanced workflows.
 
 Goals:
 - support engineering-grade project development
 - support a broader set of project and baseline types
 - support controls modeling beyond simple replacement
 - support client/program variability using shared profile-driven logic
+- provide a single-screen modeling workspace rather than a wizard-style workflow
 - prepare the Lighting module for deeper reuse of shared framework components
 
 ### 3.3 Mode transition requirement
@@ -71,7 +72,7 @@ Goals:
 The user should be able to start in the existing calculator and explicitly switch to the new framework mode using a visible UI control such as:
 
 - `Switch to Custom Lighting Project`
-- `Open Advanced Project Workflow`
+- `Open Custom Mode`
 
 This preserves continuity while introducing the expanded framework on the user's terms.
 
@@ -79,7 +80,7 @@ This preserves continuity while introducing the expanded framework on the user's
 
 ## 4. Expanded functional scope
 
-The advanced framework mode should support the following lighting project pathways.
+The custom mode should support the following lighting project pathways.
 
 ### 4.1 Fixture replacement
 - one-for-one replacements
@@ -119,6 +120,14 @@ The advanced framework mode should support the following lighting project pathwa
 - support projects where some spaces are modeled by fixtures and others by connected load or LPD
 - support controls applied selectively by space or project segment
 
+### 4.8 Unified modeling requirement
+These pathways should not require separate advanced calculators. Instead, they should all be expressible within one custom-mode data model based on:
+- baseline source
+- baseline input method
+- proposed input method
+- controls and scheduling modifiers
+- zone/space structure
+
 ---
 
 ## 5. Baseline framework expansion
@@ -152,7 +161,7 @@ Examples:
 - profile-specific exceptions
 
 ### 5.4 Requirement
-The user should explicitly select a baseline source in advanced mode:
+The user should explicitly select a baseline source in custom mode:
 
 - Existing
 - Code
@@ -228,7 +237,8 @@ The engine should be enhanced to support:
 #### E. Shared result model
 Outputs should be structured so they can support:
 - current UI summaries
-- future advanced UI summaries
+- custom mode sidebar summaries
+- full detailed output views
 - Excel export
 - profile-driven reporting requirements
 
@@ -288,26 +298,85 @@ The expanded framework should remain easy to use while exposing deeper flexibili
 ### 9.1 Existing mode UX
 The current calculator workflow should remain available with minimal disruption.
 
-### 9.2 Advanced mode UX
-The new mode should use a guided workflow rather than one oversized form.
+### 9.2 Custom mode UX
+The new mode should use a single-screen engineering workspace rather than a guided workflow or wizard.
 
-Suggested major sections:
-1. Project setup
-2. Profile and baseline selection
-3. Space/zone definition
-4. Baseline lighting input
-5. Proposed lighting input
-6. Controls configuration
-7. Results and assumptions review
-8. Export
+Custom mode should expose all major modeling categories in one continuous working view, including:
+- project/global settings
+- zoning/spaces
+- baseline inputs
+- proposed inputs
+- controls
+- scheduling
+- assumptions/notes
 
-### 9.3 Simplicity requirement
-Advanced mode should still favor usability through:
-- defaults where appropriate
-- clear labels and definitions
-- repeatable space templates/copy behavior
+The user should be able to edit these inputs non-linearly without leaving the main workspace.
+
+### 9.3 Workspace structure
+The preferred custom-mode layout is a multi-region workspace with:
+
+#### A. Top project bar
+Persistent project-level controls such as:
+- project name
+- profile selector
+- calculation mode
+- status/warnings summary
+- save/export actions
+- switch back to existing calculator mode
+
+#### B. Main modeling canvas
+The main editing area for:
+- project defaults
+- zone manager
+- zone editing
+- baseline/proposed comparisons
+- controls and scheduling inputs
+- notes and assumptions
+
+#### C. Live results sidebar
+A compact sidebar with real-time updates for:
+- kW savings
+- kWh savings
+- cost savings
+- rebate
+- payback
+
+The sidebar may also include:
+- baseline/proposed connected load summary
+- warning count
+- zone count
+- link to full results view
+
+### 9.4 Zone editing model
+Each zone/space should be editable from the same screen and contain:
+- zone identity
+- baseline source and method
+- proposed method
+- controls inputs
+- scheduling inputs
+- optional economics overrides
+- warnings and notes
+
+### 9.5 Usability requirements
+To keep a single-screen workspace manageable, the UX should favor:
+- collapsible sections
+- inline summaries for collapsed sections
+- project-level defaults with per-zone overrides
+- duplicate/copy/apply-to-many behaviors
 - visible warnings instead of hard blocking
-- expandable advanced settings instead of overwhelming first-pass entry
+- conditional field reveal based on input method and baseline type
+
+### 9.6 Full outputs view
+Detailed outputs should be available in a separate dedicated view rather than fully embedded in the custom workspace.
+
+The full outputs view should support:
+- zone-by-zone results
+- baseline/proposed comparisons
+- control impacts
+- cost, rebate, and payback details
+- assumptions and warnings review
+- export-ready presentation
+- profile/schema/engine metadata as needed for traceability
 
 ---
 
@@ -324,7 +393,7 @@ The current lighting calculator should be preserved as an active supported mode,
 ### 10.2 Migration approach
 Recommended phased approach:
 1. preserve current mode as-is in the UI
-2. add explicit transition into advanced mode
+2. add explicit transition into custom mode
 3. expand engine abstractions and shared references
 4. align current mode to the updated engine over time where feasible
 5. maintain parity checks for current scenarios during migration
@@ -343,6 +412,8 @@ Outputs should clearly communicate:
 - annual versus 8760 calculation path
 - warnings and engineering notes
 - version stamps for profile/schema/engine where applicable
+
+Custom mode should provide fast summary outputs in the live sidebar, while the full detailed output set should remain available in its own dedicated review view.
 
 Exports should remain aligned with the existing MeasureWorks philosophy of reviewer traceability and editable logic where exported to Excel.
 
@@ -367,11 +438,14 @@ The following constraints remain in force for this expansion:
 
 ### Phase 1 — Framework-ready lighting expansion MVP
 - preserve existing calculator mode
-- add visible switch to advanced project mode
-- support multi-zone projects in advanced mode
+- add visible switch to custom mode
+- implement single-screen custom workspace
+- implement live results sidebar
+- support multi-zone projects in custom mode
 - support baseline selection: existing / code / custom
 - support multiple input methods: fixtures / connected load / LPD
 - support core controls: occupancy, scheduling, daylight dimming, lumen level trim
+- support separate full-results view
 - expand profile structure for baseline and controls assumptions
 - expand shared references for schedules, space types, and controls defaults
 - update outputs to identify baseline source, mode, and assumptions
@@ -390,7 +464,7 @@ The following constraints remain in force for this expansion:
 
 MeasureWorks Lighting should be expanded as a framework-aligned dual-mode module.
 
-The current calculator experience should remain available and familiar. A new advanced project mode should be added to support remodels, LPD workflows, code baselines, new construction, controls-only projects, and mixed-method lighting projects.
+The current calculator experience should remain available and familiar. A new custom mode should be added as a single-screen engineering workspace that supports remodels, LPD workflows, code baselines, new construction, controls-only projects, and mixed-method lighting projects.
 
 These changes should be implemented primarily through:
 - shared engine expansion
