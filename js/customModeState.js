@@ -26,6 +26,19 @@ function cmDefaultProfileId(){
   return (typeof PROFILES === "object" && PROFILES) ? (Object.keys(PROFILES)[0] || null) : null;
 }
 
+/* Factory: a controls set. Both baseline and proposed carry their own — the
+   existing (baseline) condition may already include controls, and savings come
+   from the difference between the two sides' controlled loads. */
+function createCustomControls(){
+  return {
+    occupancy:  { enabled:false, factor:null },
+    daylight:   { enabled:false, factor:null },
+    trim:       { enabled:false, percent:0 },
+    scheduling: { enabled:false, factor:null },
+    customNote: ""
+  };
+}
+
 /* Factory: one zone with the full editable structure. Every modeling field a
    zone can hold exists here from the start so the UI and engine never have to
    guard against missing branches. */
@@ -46,7 +59,8 @@ function createCustomZone(opts){
       connectedLoadKw: null,
       lpd: null,
       fixtureRows: [],
-      referenceNote: ""
+      referenceNote: "",
+      controls: createCustomControls()
     },
     proposed: {
       method: "fixtures",              // fixtures | connectedLoad | lpd
@@ -54,14 +68,8 @@ function createCustomZone(opts){
       lpd: null,
       fixtureRows: [],
       sameAsBaseline: false,
-      referenceNote: ""
-    },
-    controls: {
-      occupancy:  { enabled:false, factor:null },
-      daylight:   { enabled:false, factor:null },
-      trim:       { enabled:false, percent:0 },
-      scheduling: { enabled:false, factor:null },
-      customNote: ""
+      referenceNote: "",
+      controls: createCustomControls()
     },
     economics: {
       installCost: null,
@@ -216,6 +224,7 @@ function cmCopyBaselineToProposed(id){
   zone.proposed.lpd = zone.baseline.lpd;
   zone.proposed.fixtureRows = zone.baseline.fixtureRows.map(r =>
     createFixtureRow({ label:r.label, quantity:r.quantity, inputWatts:r.inputWatts }));
+  zone.proposed.controls = JSON.parse(JSON.stringify(zone.baseline.controls));
   zone.proposed.sameAsBaseline = false;
   return zone;
 }

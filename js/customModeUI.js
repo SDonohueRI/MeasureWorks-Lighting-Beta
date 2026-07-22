@@ -137,19 +137,34 @@ function cmZoneCardHTML(z){
 
 function cmZoneSummary(z){
   const pr = z.proposed.sameAsBaseline ? "same as baseline" : cmMethodLabel(z.proposed.method);
-  const ctrls = cmControlsSummary(z);
+  const bc = cmControlsSummary(z.baseline.controls);
+  const pc = cmControlsSummary(z.proposed.controls);
   return `Baseline: ${cmSourceLabel(z.baseline.source)} &middot; ${cmMethodLabel(z.baseline.method)}`
+       + (bc ? ` (${bc})` : ``)
        + ` &nbsp;&rarr;&nbsp; Proposed: ${pr}`
-       + (ctrls ? ` &middot; Controls: ${ctrls}` : ``);
+       + (pc ? ` (${pc})` : ``);
 }
 
-function cmControlsSummary(z){
-  const c = z.controls, on = [];
+// Full-results controls cell: shows baseline (B) and proposed (P) controls.
+function cmFullControlsCell(z){
+  const bc = cmControlsSummary(z.baseline.controls);
+  const pc = cmControlsSummary(z.proposed.controls);
+  if(!bc && !pc) return "—";
+  const parts = [];
+  if(bc) parts.push("B: " + bc);
+  if(pc) parts.push("P: " + pc);
+  return parts.join(" / ");
+}
+
+// Compact controls summary for a single controls set.
+function cmControlsSummary(c){
+  if(!c) return "";
+  const on = [];
   if(c.occupancy.enabled) on.push("Occ");
   if(c.daylight.enabled)  on.push("Day");
   if(c.trim.enabled)      on.push("Trim" + (c.trim.percent ? " " + c.trim.percent + "%" : ""));
   if(c.scheduling.enabled)on.push("Sched");
-  return on.join(" + ");
+  return on.join("+");
 }
 
 /* ---- zone editor ---- */
@@ -159,10 +174,9 @@ function cmZoneEditorHTML(z){
          + cmSection("Identity", cmIdentityHTML(z))
          + cmSection("Scheduling", cmSchedulingHTML(z))
        + `</div>`
-       + `<div class="cm-ed-triple">`
+       + `<div class="cm-ed-duo">`
          + cmSection("Baseline", cmBaselineHTML(z))
          + cmSection("Proposed", cmProposedHTML(z))
-         + cmSection("Controls", cmControlsHTML(z))
        + `</div>`
        + `<div class="cm-ed-pair">`
          + cmSection("Economics / overrides", cmEconomicsHTML(z))
@@ -195,6 +209,7 @@ function cmBaselineHTML(z){
       <select onchange="cmZR('${z.id}', 'baseline.method', this.value)">${cmOptions(CM_METHODS, z.baseline.method)}</select></label>
   </div>
   ${cmMethodFieldsHTML(z, "baseline")}
+  ${cmBranchControlsHTML(z, "baseline")}
   <label class="field cm-notes"><b>Reference / citation</b>
     <input value="${cmEsc(z.baseline.referenceNote)}" oninput="cmZ('${z.id}', 'baseline.referenceNote', this.value)"></label>
   <div class="cm-shortcut"><button onclick="cmCopyBaseline('${z.id}')">Copy baseline &rarr; proposed</button></div>`;
@@ -208,8 +223,9 @@ function cmProposedHTML(z){
     ${same ? `<div class="cm-inline-note">Proposed connected load mirrors baseline; apply controls below.</div>`
       : `<div class="cm-row"><label class="field"><b>Proposed method</b>
            <select onchange="cmZR('${z.id}', 'proposed.method', this.value)">${cmOptions(CM_METHODS, z.proposed.method)}</select></label></div>
-         ${cmMethodFieldsHTML(z, "proposed")}
-         <label class="field cm-notes"><b>Reference / citation</b>
+         ${cmMethodFieldsHTML(z, "proposed")}`}
+    ${cmBranchControlsHTML(z, "proposed")}
+    ${same ? `` : `<label class="field cm-notes"><b>Reference / citation</b>
            <input value="${cmEsc(z.proposed.referenceNote)}" oninput="cmZ('${z.id}', 'proposed.referenceNote', this.value)"></label>`}`;
 }
 
@@ -249,25 +265,30 @@ function cmFixtureRowsHTML(z, which){
     <div class="addrow"><button onclick="cmFxAdd('${z.id}','${which}')">+ Add fixture row</button></div>`;
 }
 
-function cmControlsHTML(z){
-  const c = z.controls;
+// Controls block embedded inside a baseline or proposed card (which = branch).
+function cmBranchControlsHTML(z, which){
+  const c = z[which].controls;
+  const base = which + ".controls";
   const line = (key, label, valField, unit, step) => {
     const on = c[key].enabled;
     const val = c[key][valField];
     return `<div class="cm-ctrl">
       <label class="cm-ctrl-en"><input type="checkbox" ${on ? "checked" : ""}
-        onchange="cmZR('${z.id}', 'controls.${key}.enabled', this.checked)"> ${label}</label>
+        onchange="cmZR('${z.id}', '${base}.${key}.enabled', this.checked)"> ${label}</label>
       ${on ? `<label class="cm-ctrl-val">${unit}
         <input type="number" step="${step}" value="${cmVal(val)}"
-          oninput="cmZ('${z.id}', 'controls.${key}.${valField}', cmNum(this.value))"></label>` : ``}
+          oninput="cmZ('${z.id}', '${base}.${key}.${valField}', cmNum(this.value))"></label>` : ``}
     </div>`;
   };
-  return line("occupancy", "Occupancy", "factor", "Savings factor", "0.01")
-       + line("daylight",  "Daylight",  "factor", "Savings factor", "0.01")
-       + line("trim",      "High-end trim", "percent", "% power reduction", "1")
-       + line("scheduling","Scheduling", "factor", "Runtime factor", "0.01")
-       + `<label class="field cm-notes"><b>Controls note</b>
-           <input value="${cmEsc(c.customNote)}" oninput="cmZ('${z.id}', 'controls.customNote', this.value)"></label>`;
+  return `<div class="cm-branch-controls">
+      <div class="cm-branch-controls-h">Controls</div>
+      ${line("occupancy", "Occupancy", "factor", "Savings factor", "0.01")}
+      ${line("daylight",  "Daylight",  "factor", "Savings factor", "0.01")}
+      ${line("trim",      "High-end trim", "percent", "% power reduction", "1")}
+      ${line("scheduling","Scheduling", "factor", "Runtime factor", "0.01")}
+      <label class="field cm-notes"><b>Controls note</b>
+        <input value="${cmEsc(c.customNote)}" oninput="cmZ('${z.id}', '${base}.customNote', this.value)"></label>
+    </div>`;
 }
 
 function cmSchedulingHTML(z){
@@ -448,7 +469,7 @@ function cmRenderFullResults(R){
     return `<tr>
       <td>${cmEsc(z.name)}</td>
       <td>${cmSourceLabel(z.baseline.source)} · ${cmMethodLabel(z.baseline.method)} → ${z.proposed.sameAsBaseline ? "same" : cmMethodLabel(z.proposed.method)}</td>
-      <td>${cmControlsSummary(z) || "—"}</td>
+      <td>${cmFullControlsCell(z)}</td>
       <td class="num">${cmFmtNum(r.baselineKw, 2)}</td>
       <td class="num">${cmFmtNum(r.proposedKw, 2)}</td>
       <td class="num">${cmFmtNum(r.kwSavings, 2)}</td>

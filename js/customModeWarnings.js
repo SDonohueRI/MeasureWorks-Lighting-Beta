@@ -23,23 +23,28 @@ function cmBranchWarnings(branch, zone, label, out){
   }
 }
 
+// Warnings for one controls set (baseline or proposed), labelled accordingly.
+function cmControlsWarnings(controls, profile, label, out){
+  const cf = (profile && profile.controlsFactors) || {};
+  const c = controls;
+  if(c.occupancy.enabled && !cmHasNum(c.occupancy.factor) && !cmHasNum(cf.occ))
+    out.push({ level:"warn", msg:`${label} controls: occupancy enabled without a savings factor.` });
+  if(c.daylight.enabled && !cmHasNum(c.daylight.factor) && !cmHasNum(cf.daylight))
+    out.push({ level:"warn", msg:`${label} controls: daylight enabled without a savings factor.` });
+  if(c.scheduling.enabled && !cmHasNum(c.scheduling.factor))
+    out.push({ level:"warn", msg:`${label} controls: scheduling enabled without a factor.` });
+  if(c.trim.enabled && (!cmHasNum(c.trim.percent) || c.trim.percent <= 0))
+    out.push({ level:"warn", msg:`${label} controls: trim enabled but percent reduction is 0.` });
+}
+
 // All warnings for a zone. `results` (from cmCalcZone) enables savings sanity.
 function cmZoneWarnings(zone, project, profile, results){
   const out = [];
   cmBranchWarnings(zone.baseline, zone, "Baseline", out);
   if(!zone.proposed.sameAsBaseline) cmBranchWarnings(zone.proposed, zone, "Proposed", out);
 
-  // controls enabled without a usable factor (zone value or profile default)
-  const cf = (profile && profile.controlsFactors) || {};
-  const c = zone.controls;
-  if(c.occupancy.enabled && !cmHasNum(c.occupancy.factor) && !cmHasNum(cf.occ))
-    out.push({ level:"warn", msg:"Occupancy control enabled without a savings factor." });
-  if(c.daylight.enabled && !cmHasNum(c.daylight.factor) && !cmHasNum(cf.daylight))
-    out.push({ level:"warn", msg:"Daylight control enabled without a savings factor." });
-  if(c.scheduling.enabled && !cmHasNum(c.scheduling.factor))
-    out.push({ level:"warn", msg:"Scheduling control enabled without a factor." });
-  if(c.trim.enabled && (!cmHasNum(c.trim.percent) || c.trim.percent <= 0))
-    out.push({ level:"warn", msg:"Trim enabled but percent reduction is 0." });
+  cmControlsWarnings(zone.baseline.controls, profile, "Baseline", out);
+  cmControlsWarnings(zone.proposed.controls, profile, "Proposed", out);
 
   // schedule-dependent energy: no resolved schedule → default hours placeholder
   const key = zone.scheduleInherited ? (project.defaults && project.defaults.scheduleId) : zone.scheduleId;

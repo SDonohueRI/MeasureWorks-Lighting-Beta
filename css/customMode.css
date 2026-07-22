@@ -71,7 +71,7 @@
 .cm-zone-body{border-top:1px solid var(--line);padding:10px 12px;
   display:flex;flex-direction:column;gap:8px}
 .cm-ed-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
-.cm-ed-triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:start}
+.cm-ed-duo{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
 .cm-sub{border:1px solid #e8ecf0;border-radius:5px;overflow:hidden}
 .cm-sub-h{background:#f4f6f8;padding:4px 9px;font-size:10px;text-transform:uppercase;
   letter-spacing:.6px;color:#51606e;font-weight:600}
@@ -82,9 +82,12 @@
 .cm-sub-b .cm-row{margin-top:6px}
 .cm-sub-b .cm-row:first-child{margin-top:0}
 
+/* embedded controls block inside a baseline/proposed card */
+.cm-branch-controls{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+.cm-branch-controls-h{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#8a97a3;font-weight:600;margin-bottom:4px}
+
 /* progressively collapse columns on narrower workspaces */
-@media(max-width:1200px){.cm-ed-triple{grid-template-columns:1fr 1fr}}
-@media(max-width:900px){.cm-ed-triple,.cm-ed-pair{grid-template-columns:1fr}}
+@media(max-width:900px){.cm-ed-duo,.cm-ed-pair{grid-template-columns:1fr}}
 
 /* inline field: label left (fixed), input right (wide) */
 .cm-sub-b .field{display:flex;align-items:center;gap:9px;margin:0}

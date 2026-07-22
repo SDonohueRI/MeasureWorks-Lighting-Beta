@@ -47,17 +47,27 @@ function cmZoneAnnualHours(zone, project){
   return CM_DEFAULT_ANNUAL_HOURS;
 }
 
-/* Sequential energy multiplier from runtime controls (occupancy, daylight,
-   scheduling). Each enabled control uses its zone factor, or the profile default
-   where one exists, and reduces energy multiplicatively — so combined savings
-   never exceed 100% and never simply add. Returns a factor in [0,1]. */
-function cmControlEnergyFactor(zone, profile){
-  const c = zone.controls, cf = (profile && profile.controlsFactors) || {};
+/* Sequential energy multiplier from a controls set's runtime controls
+   (occupancy, daylight, scheduling). Each enabled control uses its own factor,
+   or the profile default where one exists, and reduces energy multiplicatively
+   — so combined savings never exceed 100% and never simply add. Returns [0,1]. */
+function cmControlEnergyFactor(controls, profile){
+  const c = controls, cf = (profile && profile.controlsFactors) || {};
   let f = 1;
   if(c.occupancy.enabled)  f *= (1 - cmNumOr(c.occupancy.factor,  cmNumOr(cf.occ, 0)));
   if(c.daylight.enabled)   f *= (1 - cmNumOr(c.daylight.factor,   cmNumOr(cf.daylight, 0)));
   if(c.scheduling.enabled) f *= (1 - cmNumOr(c.scheduling.factor, 0));
   return f < 0 ? 0 : f;
+}
+
+/* Energy for one side (baseline or proposed) given its raw connected load and
+   its own controls: trim lowers connected power directly, then occupancy/
+   daylight/scheduling reduce annual energy sequentially. */
+function cmBranchEnergy(controls, rawKw, hours, profile){
+  const trim = controls.trim;
+  const effKw = trim.enabled ? rawKw * (1 - cmNumOr(trim.percent, 0) / 100) : rawKw;
+  const factor = cmControlEnergyFactor(controls, profile);
+  return { effKw, factor, kwh: effKw * hours * factor };
 }
 
 /* Profile/override rebate for a zone. Priority (spec §11.7):
@@ -82,24 +92,25 @@ function cmCalcZone(zone, project, profile){
   const ieOn = !!(project.defaults && project.defaults.interactiveEffectsEnabled);
   const ie = (typeof ieFor === "function") ? ieFor(profile, zone.spaceType, ieOn) : { kwh:1, kw:1 };
 
-  const baselineKw = cmConnectedLoadKw(zone.baseline, zone);
-  let proposedKw = zone.proposed.sameAsBaseline
-    ? baselineKw
-    : cmConnectedLoadKw(zone.proposed, zone);
-
-  // Trim is a power reduction: it lowers the proposed connected load directly.
-  const trim = zone.controls.trim;
-  if(trim.enabled) proposedKw *= (1 - cmNumOr(trim.percent, 0) / 100);
-
   const hours = cmZoneAnnualHours(zone, project);
-  const ctrlFactor = cmControlEnergyFactor(zone, profile);
 
-  const baselineKwh = baselineKw * hours;
-  const proposedKwh = proposedKw * hours * ctrlFactor;
+  // Raw connected loads from each side's method; proposed may mirror baseline.
+  const baseRawKw = cmConnectedLoadKw(zone.baseline, zone);
+  const propRawKw = zone.proposed.sameAsBaseline ? baseRawKw : cmConnectedLoadKw(zone.proposed, zone);
+
+  // Apply each side's own controls (trim to power, occ/daylight/scheduling to
+  // energy). Baseline can carry controls too — savings come from the delta.
+  const B = cmBranchEnergy(zone.baseline.controls, baseRawKw, hours, profile);
+  const P = cmBranchEnergy(zone.proposed.controls, propRawKw, hours, profile);
+
+  const baselineKw = B.effKw;   // trim-adjusted (operating) connected load
+  const proposedKw = P.effKw;
+  const baselineKwh = B.kwh;
+  const proposedKwh = P.kwh;
   const kwhSavings  = (baselineKwh - proposedKwh) * ie.kwh;
 
-  // Demand savings: connected-load delta × coincidence (if the profile defines
-  // it for this space type) × interactive-effects kW factor.
+  // Demand savings: operating connected-load delta × coincidence (if the profile
+  // defines it for this space type) × interactive-effects kW factor.
   const coincidence = cmNumOr(profile.coincidenceFactor && profile.coincidenceFactor[zone.spaceType], 1);
   const kwSavings = (baselineKw - proposedKw) * coincidence * ie.kw;
 
@@ -116,7 +127,8 @@ function cmCalcZone(zone, project, profile){
 
   return {
     baselineKw, proposedKw, deltaKw: baselineKw - proposedKw,
-    hours, ctrlFactor,
+    baseRawKw, propRawKw,
+    hours, baseCtrlFactor: B.factor, propCtrlFactor: P.factor,
     baselineKwh, proposedKwh, kwhSavings,
     kwSavings, coincidence,
     rate, costSavings,
